@@ -25,7 +25,7 @@ export function UpdateLine({ bundle }: { bundle: Pick<LiveBundle, "isMock" | "ge
         )}
       </div>
       {open && (
-        <div className="mt-2 rounded-lg border border-slate-line bg-white p-3">
+        <div className="mt-2 rounded-lg border border-slate-line bg-slate-card p-3">
           <ul className="grid gap-1 sm:grid-cols-2">
             {bundle.status.sources.map((s) => (
               <li key={s.name} className="flex justify-between gap-3"><span>{s.ok ? "✓" : "✕"} {s.name}</span><span>{s.detail}</span></li>

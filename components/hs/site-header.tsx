@@ -24,10 +24,10 @@ export function SiteHeader() {
   const is = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
     <>
-      <header className="sticky top-0 z-30 border-b border-slate-line bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-slate-line bg-obsidian/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1200px] items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-lg font-black text-white">H</span>
+            <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-lg font-black text-obsidian">H</span>
             <span className="leading-tight">
               <span className="block text-[17px] font-black tracking-tight text-ink">Hunter&apos;s Sportsbook</span>
               <span className="block text-[11px] text-muted-foreground">NFL odds, picks &amp; props · no bets taken here</span>
@@ -37,7 +37,7 @@ export function SiteHeader() {
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} aria-current={is(n.href) ? "page" : undefined}
                 className={cn("rounded-md px-3 py-2 text-sm font-semibold transition-colors",
-                  is(n.href) ? "bg-brand text-white" : "text-ink/70 hover:bg-slate-raised hover:text-ink")}>
+                  is(n.href) ? "bg-brand text-obsidian" : "text-ink/70 hover:bg-slate-raised hover:text-ink")}>
                 {n.label}
               </Link>
             ))}
@@ -57,8 +57,8 @@ function PhoneTabs({ is, path }: { is: (href: string) => boolean; path: string }
     <div className="lg:hidden">
       {more && (
         <>
-          <button type="button" aria-label="Close menu" onClick={() => setMore(false)} className="fixed inset-0 z-40 bg-black/30" />
-          <nav aria-label="More pages" className="fixed inset-x-0 bottom-16 z-50 rounded-t-xl border-t border-slate-line bg-white p-2 pb-3 shadow-lg">
+          <button type="button" aria-label="Close menu" onClick={() => setMore(false)} className="fixed inset-0 z-40 bg-black/60" />
+          <nav aria-label="More pages" className="fixed inset-x-0 bottom-16 z-50 rounded-t-xl border-t border-slate-line bg-slate-card p-2 pb-3 shadow-lg">
             {rest.map(({ href, label, icon: Icon }) => (
               <Link key={href} href={href} aria-current={is(href) ? "page" : undefined}
                 className={cn("flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-semibold", is(href) ? "bg-brand-soft text-brand" : "text-ink")}>
@@ -68,7 +68,7 @@ function PhoneTabs({ is, path }: { is: (href: string) => boolean; path: string }
           </nav>
         </>
       )}
-      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-5 border-t border-slate-line bg-white pb-[env(safe-area-inset-bottom)]">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-50 grid h-16 grid-cols-5 border-t border-slate-line bg-slate-card pb-[env(safe-area-inset-bottom)]">
         {TABS.map(({ href, label, icon: Icon }) => (
           <Link key={href} href={href} aria-current={is(href) ? "page" : undefined}
             className={cn("flex flex-col items-center justify-center gap-0.5 text-[11px] font-semibold", is(href) ? "text-brand" : "text-muted-foreground")}>

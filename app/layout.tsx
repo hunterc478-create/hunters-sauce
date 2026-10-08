@@ -14,9 +14,9 @@ export const metadata: Metadata = {
   // home-screen app: icon, full-screen launch, and the name under the icon
   manifest: `${base}/manifest.webmanifest`,
   icons: { icon: `${base}/icon-192.png`, apple: `${base}/apple-touch-icon.png` },
-  appleWebApp: { capable: true, title: "Hunter's", statusBarStyle: "default" },
+  appleWebApp: { capable: true, title: "Hunter's", statusBarStyle: "black-translucent" },
 };
-export const viewport: Viewport = { themeColor: "#FFFFFF", width: "device-width", initialScale: 1, viewportFit: "cover" };
+export const viewport: Viewport = { themeColor: "#0E0F12", width: "device-width", initialScale: 1, viewportFit: "cover" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   const bundle = loadBundle();

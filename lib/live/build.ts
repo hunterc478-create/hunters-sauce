@@ -25,7 +25,9 @@ import { mlbOfficial, nbaOfficial, nhlOfficial } from "./sources/official";
 import { kalshi, polymarket } from "./sources/markets";
 import { oddsApiLines } from "./sources/odds-api-lines";
 import { cfbdSpPlus, footballData, lookup, mlbStandings, moneypuck, nflverse, seasonYear, type RatingTable } from "./ratings";
-import { NflPlayers, normName } from "./players/nfl";
+import { NflPlayers, normName, toNflverseAbbr, type NflStat } from "./players/nfl";
+import { probOver } from "@/lib/engine/props";
+import { slotOf } from "@/lib/nfl";
 import { kalshiLadders } from "./sources/kalshi-ladders";
 import { NflHistory } from "./nfl-history";
 import { pausedTypes, qualifies } from "./policy";
@@ -309,7 +311,7 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
       const rp = await getProps(c.matchup.league, {
         matchupId: c.matchup.id, home: c.matchup.home.name, away: c.matchup.away.name,
         homeAvgPts: (c.factors.home.ratings.offense ?? 0) + avgPts, awayAvgPts: (c.factors.away.ratings.offense ?? 0) + avgPts, homeRoster, awayRoster,
-      }, c.prediction, c.prediction.confidenceTier);
+      }, c.prediction, c.prediction.confidenceTier, PRIMETIME.has(slotOf(c.matchup.startTime).key));
       if (rp) { props.push(...rp); loaded++; fresh.add(c.matchup.id); }
     }
     if (soon.length) note("Player props (The Odds API)", loaded > 0,
@@ -324,8 +326,20 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
 
   // ---- 5) transparency log ----
   // build the board once, log what it recommends, then rebuild with the updated record
-  // Kalshi props are priced from our own projections, which this site doesn't recommend; they only feed the TD derby
-  // (computed above). Leaving thousands of them out keeps the data small enough for phones.
+  // our chance for every sportsbook prop, from our player projections; Kalshi rungs already carry it
+  if (nflPlayers) {
+    let withOurs = 0;
+    for (const p of props) {
+      const c = cards.find((x) => x.matchup.id === p.matchupId);
+      const r = c ? ourPropChance(p, c, nflPlayers, outByTeam) : null;
+      if (r) { p.ourProb = r.prob; p.why = r.why; withOurs++; }
+    }
+    if (props.length) note("Our prop projections", withOurs > 0, `${withOurs} of ${props.length} sportsbook props have our chance`);
+  }
+  // same bar as sportsbook props: "high" confidence means 3+ games of data behind the projection
+  for (const p of kalshiProps) if (p.confidence === "high" && ourChanceSane(p.modelProb, p)) { p.ourProb = p.modelProb; p.why = p.matchupNote; }
+  // thousands of Kalshi rungs: keep the playable ones (a couple per player and stat) so the data stays phone-sized
+  props = [...props, ...trimRungs(kalshiProps)];
   const prelim = assemble({ tdDerby: derby, cards, bets, props, history: previousHistory, generatedAt: now.toISOString(), isMock: false, tz: DAY_TZ, paused });
   const history = await updateHistory(previousHistory, prelim, cards, reg.games, now, nflPlayers);
   if (fetchLog.length) notes.push(`${fetchLog.length} requests failed this run (status: ${[...new Set(fetchLog.map((f) => String(f.status)))].slice(0, 4).join(", ")}). Other sources filled in where they could.`);
@@ -406,6 +420,53 @@ function marketAnchor(g: Game, o: MarketOutcome): { fairProb: number; best: Odds
   const ok = o.quotes.filter((q) => !NOT_BETTABLE.has(q.bookmaker.key) && implied(q.americanOdds) >= fairProb - OUTLIER_PTS);
   if (!ok.length) return undefined;
   return { fairProb, best: ok.reduce((a, b) => (implied(b.americanOdds) < implied(a.americanOdds) ? b : a)), books: fair.length };
+}
+
+/**
+ * A projection 25+ points away from the price almost always means news it missed (a QB change, a role change), not a
+ * gift; showing it would invite exactly the bets that sank the old model, so no number is shown.
+ */
+const ourChanceSane = (prob: number, p: PlayerProp) => Math.abs(prob - p.impliedProb) <= 0.25;
+
+/** Primetime windows get alt prop ladders from the sportsbooks (they cost extra credits). */
+const PRIMETIME = new Set(["thu", "snf", "mnf"]);
+
+/** Our chance for a sportsbook prop: the same player projection the Kalshi rungs use (form, opponent, script, injuries). */
+function ourPropChance(p: PlayerProp, c: MatchupCardData, players: NflPlayers, outByTeam: Map<string, Set<string>>): { prob: number; why: string } | null {
+  if (!["passing_yards", "rushing_yards", "receiving_yards", "receptions", "passing_tds"].includes(p.stat)) return null;
+  const team = players.teamOf(p.playerName);
+  const home = toNflverseAbbr(c.matchup.home.abbreviation), away = toNflverseAbbr(c.matchup.away.abbreviation);
+  if (!team || (team !== home && team !== away)) return null;
+  const isHome = team === home;
+  const teamPts = isHome ? c.prediction.projectedScore.home : c.prediction.projectedScore.away;
+  const usual = 22 + ((isHome ? c.factors.home : c.factors.away).ratings.offense ?? 0);
+  const script = usual > 0 ? 1 + 0.25 * (teamPts / usual - 1) : 1;
+  const out = outByTeam.get(`${c.matchup.id}:${isHome ? "home" : "away"}`) ?? new Set<string>();
+  if (out.has(normName(p.playerName))) return null;
+  const stat = p.stat as NflStat;
+  const proj = players.project(p.playerName, stat, isHome ? away : home, script, 0.06, players.usageBoost(p.playerName, team, out, stat));
+  // fewer than 3 games of data (a backup suddenly starting, a rookie) means the projection is a guess: no number
+  if (!proj || proj.games < 3) return null;
+  const pOver = probOver(proj, p.line);
+  const prob = p.side === "over" ? pOver : 1 - pOver;
+  if (!ourChanceSane(prob, p)) return null;
+  return { prob, why: `Projects ${proj.mean.toFixed(1)}. ${proj.note}`.trim() };
+}
+
+/**
+ * Kalshi prop rungs worth showing: -250 to +400, either likely (our chance 50%+) or a longshot we like (25%+ and 3+ points
+ * over the price), best two per player and stat by how much we like them over the price.
+ */
+function trimRungs(rungs: PlayerProp[]): PlayerProp[] {
+  const keep = rungs.filter((p) => {
+    if (p.ourProb === undefined) return false;
+    const o = p.bestQuote.americanOdds, our = p.ourProb;
+    if (p.flags?.includes("large_gap") || o < -250 || o > 400) return false;
+    return o <= 120 ? our >= 0.5 : our >= 0.25 && our - p.impliedProb >= 0.03;
+  });
+  const groups = new Map<string, PlayerProp[]>();
+  for (const p of keep) { const k = `${p.matchupId}|${p.playerName}|${p.stat}`; groups.set(k, [...(groups.get(k) ?? []), p]); }
+  return [...groups.values()].flatMap((g) => g.sort((a, b) => ((b.ourProb ?? 0) - b.impliedProb) - ((a.ourProb ?? 0) - a.impliedProb)).slice(0, 2));
 }
 
 /**

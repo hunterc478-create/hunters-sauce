@@ -4,6 +4,7 @@ import { isMainLine } from "@/lib/live/openers";
 import { isValueBet } from "@/lib/live/policy";
 import { kickoff, logo } from "@/lib/nfl";
 import { fmtAmerican } from "@/lib/utils";
+import { alpha, teamColor } from "@/lib/team-colors";
 
 /** Teaser-leg bar a 2-team, 6-point teaser at -120 has to clear, per leg. */
 export const TEASER_BREAKEVEN = 0.739;
@@ -33,7 +34,9 @@ export function GameTile({ card }: { card: MatchupCardData }) {
   const over = mainBet(card, "total", "over");
   const rows = (["away", "home"] as const).map((side) => ({ side, team: m[side], spread: mainBet(card, "spread", side), ml: mainBet(card, "moneyline", side) }));
   return (
-    <Link href={`/game/${m.id}/`} className="group block rounded-lg border border-slate-line bg-white p-4 shadow-card transition-shadow hover:shadow-md">
+    <Link href={`/game/${m.id}/`} className="group relative block overflow-hidden rounded-xl border border-slate-line p-4 transition-colors hover:border-ink/30"
+      style={{ background: `linear-gradient(135deg, ${alpha(teamColor(m.away.abbreviation), 0.16)} 0%, #17191E 45%, #17191E 55%, ${alpha(teamColor(m.home.abbreviation), 0.16)} 100%)` }}>
+      <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${teamColor(m.away.abbreviation)} 0 50%, ${teamColor(m.home.abbreviation)} 50% 100%)` }} />
       <div className="mb-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>{m.status === "live" ? <b className="text-loss">LIVE</b> : kickoff(m.startTime)}</span>
         <span className="flex gap-1">

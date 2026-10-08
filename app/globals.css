@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    /* Hunter's Sportsbook: paper #F6F5F2, cards white, ink #111, brand red #C8102E, value green #13804A */
-    --background: 45 14% 96%;
-    --foreground: 0 0% 7%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 7%;
-    --primary: 351 85% 42%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 40 13% 93%;
-    --secondary-foreground: 0 0% 7%;
-    --muted: 40 13% 93%;
-    --muted-foreground: 0 0% 40%;
-    --accent: 40 13% 93%;
-    --accent-foreground: 0 0% 7%;
-    --destructive: 4 76% 40%;
-    --destructive-foreground: 0 0% 100%;
-    --border: 40 11% 87%;
-    --input: 40 11% 87%;
-    --ring: 351 85% 42%;
-    --radius: 0.5rem;
-    color-scheme: light;
+    /* Hunter's Sportsbook v2: charcoal #0E0F12, cards #17191E, ink #F3F4F6, brand orange #FF7A1A, good green #34D399 */
+    --background: 228 13% 6%;
+    --foreground: 220 14% 96%;
+    --card: 225 13% 10%;
+    --card-foreground: 220 14% 96%;
+    --primary: 25 100% 55%;
+    --primary-foreground: 228 13% 6%;
+    --secondary: 222 13% 14%;
+    --secondary-foreground: 220 14% 96%;
+    --muted: 222 13% 14%;
+    --muted-foreground: 220 9% 62%;
+    --accent: 222 13% 14%;
+    --accent-foreground: 220 14% 96%;
+    --destructive: 0 91% 71%;
+    --destructive-foreground: 228 13% 6%;
+    --border: 222 12% 19%;
+    --input: 222 12% 19%;
+    --ring: 25 100% 55%;
+    --radius: 0.75rem;
+    color-scheme: dark;
   }
   * { @apply border-border; }
   body { @apply bg-obsidian text-foreground antialiased; font-feature-settings: "ss01", "cv11"; }

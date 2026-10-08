@@ -18,17 +18,16 @@ const config: Config = {
         accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
         destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
         card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
-        // Hunter's Sportsbook: light "sports page" palette. Deep red is the brand (header, active links, buttons);
-        // green marks good numbers (value, wins); losses use a darker red with a minus sign.
-        // v1 token names are kept so shared components follow: obsidian = page background, neon = positive/value.
-        obsidian: "#F6F5F2",
-        ink: "#111111",
-        brand: { DEFAULT: "#C8102E", dim: "#A30D25", soft: "#FBE9EC" },
-        neon: { DEFAULT: "#13804A", dim: "#0E6A3D" },
-        slate: { card: "#FFFFFF", raised: "#F1EFEB", line: "#E3E0DA", hover: "#EAE7E1" },
-        info: "#1D5FBF",
-        warn: "#B45309",
-        loss: "#B42318",
+        // Hunter's Sportsbook v2: dark charcoal with team colors carrying the color; orange is the brand
+        // (header, active tabs, buttons); green marks good numbers; losses red. v1 token names kept for shared parts.
+        obsidian: "#0E0F12",
+        ink: "#F3F4F6",
+        brand: { DEFAULT: "#FF7A1A", dim: "#E5650A", soft: "#3A2414" },
+        neon: { DEFAULT: "#34D399", dim: "#10B981" },
+        slate: { card: "#17191E", raised: "#1F2228", line: "#2B2F37", hover: "#252931" },
+        info: "#7CB4FF",
+        warn: "#FBBF24",
+        loss: "#F87171",
       },
       boxShadow: { card: "0 1px 2px rgba(17,17,17,0.04), 0 1px 1px rgba(17,17,17,0.03)" },
       fontFamily: {

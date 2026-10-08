@@ -349,6 +349,10 @@ export interface PlayerProp {
   source?: "kalshi" | "sportsbook";
   /** Kalshi market ticker, used to grade from Kalshi's settled result. */
   ticker?: string;
+  /** Our chance from our player projection (recent form, opponent, game script, injured teammates). */
+  ourProb?: number;
+  /** One-line reason behind ourProb. */
+  why?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { loadBundle } from "@/lib/load-dashboard";
-import { ParlaysView } from "@/components/day/views";
+import { ParlaysPage } from "@/components/hs/views";
 
 export default function Page() {
-  return <ParlaysView bundle={loadBundle()} />;
+  return <ParlaysPage bundle={loadBundle()} />;
 }

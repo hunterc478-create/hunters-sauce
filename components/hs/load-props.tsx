@@ -11,7 +11,7 @@ const REPO = process.env.NEXT_PUBLIC_REPO || "InstantHunter-11/hunters-sportsboo
 export function LoadPropsButton({ compact = false }: { compact?: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className={compact ? "mt-3" : "mb-6 rounded-lg border border-slate-line bg-white p-4 shadow-card"}>
+    <div className={compact ? "mt-3" : "mb-6 rounded-lg border border-slate-line bg-slate-card p-4 shadow-card"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         {!compact && (
           <div>
@@ -21,7 +21,7 @@ export function LoadPropsButton({ compact = false }: { compact?: boolean }) {
         )}
         <div className="flex items-center gap-3">
           <a href={`https://github.com/${REPO}/actions/workflows/deploy.yml`} target="_blank" rel="noreferrer"
-            className="inline-flex h-10 items-center rounded-md bg-brand px-4 text-sm font-bold text-white hover:bg-brand-dim">
+            className="inline-flex h-10 items-center rounded-md bg-brand px-4 text-sm font-bold text-obsidian hover:bg-brand-dim">
             Load props now ↗
           </a>
           <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="text-sm font-semibold text-muted-foreground underline-offset-2 hover:text-ink hover:underline">
