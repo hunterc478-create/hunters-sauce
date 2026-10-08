@@ -86,7 +86,10 @@ export function propRows(props: PlayerProp[], cards: MatchupCardData[]): BetRow[
  * DraftKings...) rank ahead of Kalshi rungs: a 3-point handicap on Kalshi, so it shows up but doesn't crowd the top.
  */
 export function rank(rows: BetRow[], view: View): BetRow[] {
-  const ours = rows.filter((r): r is BetRow & { our: number } => r.our !== undefined);
+  // one row per bet: a repeated key makes React duplicate rows each time the list re-sorts (switching tabs)
+  const seen = new Set<string>();
+  const unique = rows.filter((r) => !seen.has(r.key) && seen.add(r.key));
+  const ours = unique.filter((r): r is BetRow & { our: number } => r.our !== undefined);
   const k = (r: BetRow) => (r.book === "Kalshi" ? 0.03 : 0);
   const likeMore = (r: BetRow & { our: number }) => r.our - r.books - k(r);
   if (view === "longshots")

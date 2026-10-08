@@ -458,7 +458,10 @@ function ourPropChance(p: PlayerProp, c: MatchupCardData, players: NflPlayers, o
  * over the price), best two per player and stat by how much we like them over the price.
  */
 function trimRungs(rungs: PlayerProp[]): PlayerProp[] {
-  const keep = rungs.filter((p) => {
+  // Kalshi can list the same bet in two series (e.g. anytime TD and a "protected" TD market): one copy, best price
+  const best = new Map<string, PlayerProp>();
+  for (const p of rungs) { const ex = best.get(p.id); if (!ex || p.bestQuote.americanOdds > ex.bestQuote.americanOdds) best.set(p.id, p); }
+  const keep = [...best.values()].filter((p) => {
     if (p.ourProb === undefined) return false;
     const o = p.bestQuote.americanOdds, our = p.ourProb;
     if (p.flags?.includes("large_gap") || o < -250 || o > 400) return false;
