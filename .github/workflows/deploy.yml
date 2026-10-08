@@ -57,7 +57,8 @@ jobs:
           THE_ODDS_API_KEY: ${{ secrets.THE_ODDS_API_KEY }}
           CFBD_API_KEY: ${{ secrets.CFBD_API_KEY }}
           FOOTBALL_DATA_KEY: ${{ secrets.FOOTBALL_DATA_KEY }}
-          FORCE_PROPS: ${{ inputs.load_props }}
+          # load props now: the "Load player props now" box, or a pushed commit with [props] in its message
+          FORCE_PROPS: ${{ inputs.load_props || contains(github.event.head_commit.message, '[props]') }}
           LEAGUES: ${{ vars.LEAGUES }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}   # phone alerts (ntfy app); unset = off
           NOTIFY: ${{ vars.NOTIFY }}              # "locks" (default) or "all"
