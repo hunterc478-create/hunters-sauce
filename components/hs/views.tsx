@@ -1,27 +1,25 @@
 "use client";
 /** Hunter's Sportsbook pages: This Week, a page per game, Best Bets, Props, Teasers. */
+import { useState } from "react";
 import Link from "next/link";
-import type { MatchupCardData, PlayerProp, TeaserLeg, ValueBet } from "@/types/sports";
+import type { MatchupCardData, PlayerProp, TeaserLeg } from "@/types/sports";
 import type { LiveBundle } from "@/lib/live/assemble";
-import { isValueBet } from "@/lib/live/policy";
-import { toDecimal } from "@/lib/odds-math";
 import { bySlot, kickoff, weekOf } from "@/lib/nfl";
-import { cn, fmtAmerican, fmtPct } from "@/lib/utils";
-import { EvPicksTable } from "@/components/dashboard/ev-picks-table";
+import { cn, fmtPct } from "@/lib/utils";
 import { LocksTable } from "@/components/dashboard/locks-table";
 import { TdDerby } from "@/components/dashboard/td-derby";
 import { GameRow } from "@/components/board/game-row";
 import { GameTile, TEASER_BREAKEVEN, TEASER_LEG_MIN, TeamLogo } from "./game-tile";
 import { LoadPropsButton } from "./load-props";
+import { BetList, byEv, lineRows, propRows, type BetRow } from "./bet-list";
 
 const open = (cards: MatchupCardData[]) => cards.filter((c) => c.matchup.status !== "final" && c.matchup.league === "NFL");
-const valueBets = (cards: MatchupCardData[]) => open(cards).flatMap((c) => [c.recommended, ...c.otherBets].filter((b) => isValueBet(b, "NFL")))
-  .sort((a, b) => b.expectedValue - a.expectedValue);
 
-/** Props worth showing: sportsbook props (consensus-priced) a book pays 2+ points over fair on. */
-const PROP_MIN_EDGE = 0.02;
-const propEv = (p: PlayerProp) => p.modelProb * toDecimal(p.bestQuote.americanOdds) - 1;
-const bookProps = (props: PlayerProp[]) => props.filter((p) => p.source !== "kalshi" && !p.flags?.includes("large_gap"));
+/** Every game line and sportsbook prop on open games, best EV first. */
+const allRows = (cards: MatchupCardData[], props: PlayerProp[]): BetRow[] => {
+  const games = open(cards);
+  return byEv([...games.flatMap(lineRows), ...propRows(props, games)]);
+};
 
 function Title({ kicker, title, sub }: { kicker?: string; title: string; sub?: string }) {
   return (
@@ -47,24 +45,37 @@ function Section({ title, href, link, children }: { title: string; href?: string
 
 const Empty = ({ text }: { text: string }) => <p className="rounded-lg border border-dashed border-slate-line bg-white p-6 text-center text-sm text-muted-foreground">{text}</p>;
 
+/** Filter chips (bet type, game). */
+function Chips<T extends string>({ value, onChange, options }: { value: T; onChange: (v: T) => void; options: [T, string][] }) {
+  return (
+    <div className="-mx-1 mb-4 flex gap-1.5 overflow-x-auto px-1 pb-1" role="group" aria-label="Filter">
+      {options.map(([k, label]) => (
+        <button key={k} type="button" aria-pressed={value === k} onClick={() => onChange(k)}
+          className={cn("shrink-0 rounded-full border px-3 py-1 text-xs font-bold", value === k ? "border-brand bg-brand text-white" : "border-slate-line bg-white text-ink/70 hover:text-ink")}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // ---------------- This Week ----------------
 
 export function WeekView({ bundle }: { bundle: LiveBundle }) {
   const data = bundle.byDay.all;
   const games = open(data.matchups);
   const week = weekOf(games);
-  const vb = valueBets(data.matchups);
+  const rows = allRows(data.matchups, data.props);
   const legs = games.flatMap((c) => c.teasers ?? []).filter((t) => t.prob >= TEASER_LEG_MIN);
-  const props = bookProps(data.props).filter((p) => p.edge >= PROP_MIN_EDGE);
   const tiles = [
-    { k: "Value bets", v: vb.length, href: "/best-bets/" },
-    { k: "Prop edges", v: props.length, href: "/props/" },
+    { k: "Bets ranked", v: rows.length, href: "/best-bets/" },
+    { k: "Props loaded", v: rows.filter((r) => r.kind === "Prop").length, href: "/props/" },
     { k: "Teaser legs", v: legs.length, href: "/teasers/" },
     { k: "Locks", v: data.locks?.length ?? 0, href: "/locks/" },
   ];
   return (
     <>
-      <Title kicker="NFL" title={week ? `Week ${week}` : "This week"} sub="Every game's best price across the sportsbooks, checked against the fair price from all of them together. Tap a game for its full page." />
+      <Title kicker="NFL" title={week ? `Week ${week}` : "This week"} sub="Best prices across the books for every game. Tap a game for its full ranked list." />
       <div className="mb-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((t) => (
           <Link key={t.k} href={t.href} className="rounded-lg border border-slate-line bg-white p-4 shadow-card hover:shadow-md">
@@ -73,9 +84,9 @@ export function WeekView({ bundle }: { bundle: LiveBundle }) {
           </Link>
         ))}
       </div>
-      {vb.length > 0 && (
-        <Section title="Best bets right now" href="/best-bets/" link="All best bets">
-          <EvPicksTable picks={vb} matchups={data.matchups} limit={3} title="Top value" />
+      {rows.length > 0 && (
+        <Section title="Top bets right now" href="/best-bets/" link="Top 25">
+          <BetList rows={rows.slice(0, 5)} />
         </Section>
       )}
       {!games.length && <Empty text="No NFL games on the board yet. Lines for next week usually post Sunday night." />}
@@ -95,7 +106,8 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
   const card = data.matchups.find((c) => c.matchup.id === id);
   if (!card) return <><Title title="Game not found" /><Empty text="This game isn't on the board anymore (it may have finished). Head back to This Week." /></>;
   const m = card.matchup;
-  const props = bookProps(data.props.filter((p) => p.matchupId === id)).sort((a, b) => b.edge - a.edge);
+  const rows = byEv([...lineRows(card), ...propRows(data.props.filter((p) => p.matchupId === id), [card])]);
+  const hasProps = rows.some((r) => r.kind === "Prop");
   const td = (data.tdDerby ?? []).filter((t) => t.matchupId === id);
   const lean = card.prediction.modelVersion !== "market" ? card.prediction : null;
   const injuries = (["away", "home"] as const).map((s) => ({ team: m[s], list: card.factors[s].injuries.filter((i) => i.status !== "probable") }));
@@ -108,9 +120,9 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
         <div className="flex items-center justify-between gap-4">
           {(["away", "home"] as const).map((s, i) => (
             <div key={s} className={cn("flex min-w-0 flex-1 items-center gap-3", i === 1 && "flex-row-reverse text-right")}>
-              <TeamLogo team={m[s]} size={56} />
+              <TeamLogo team={m[s]} size={40} />
               <div className="min-w-0">
-                <div className="truncate text-xl font-black text-ink sm:text-2xl">{m[s].shortName}</div>
+                <div className="break-words text-base font-black leading-tight text-ink sm:text-2xl">{m[s].shortName}</div>
                 <div className="text-xs text-muted-foreground">{m[s].record ?? ""}{s === "home" ? " · home" : ""}</div>
               </div>
             </div>
@@ -123,7 +135,13 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
         </div>
       </header>
 
-      <Section title="Lines & best prices">
+      <Section title={`All bets, ranked (${rows.length})`}>
+        <BetList rows={rows} showGame={false} />
+        {!hasProps && <p className="mt-2 text-sm text-muted-foreground">Props for this game load at 9 AM Central the day before or the day of kickoff.</p>}
+        <LoadPropsButton compact />
+      </Section>
+
+      <Section title="Every book's price">
         <GameRow card={card} defaultOpen />
       </Section>
 
@@ -131,15 +149,8 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
         <TeaserTable legs={card.teasers ?? []} cards={[card]} />
       </Section>
 
-      <Section title="Player props">
-        {props.length ? <PropsTable props={props} cards={[card]} />
-          : <Empty text="Sportsbook props for this game load at 9 AM Central the day before or the day of kickoff." />}
-        <LoadPropsButton compact />
-      </Section>
-
       {td.length > 0 && (
-        <Section title="Anytime TD (our model)">
-          <p className="mb-3 text-xs text-muted-foreground">These chances come from our own player model, not the sportsbooks, so treat them as a guide: only bet one when a book pays more than the fair price shown.</p>
+        <Section title="Anytime TD chances">
           <TdDerby list={td} modelOnly />
         </Section>
       )}
@@ -164,12 +175,14 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
 
 export function BestBetsView({ bundle }: { bundle: LiveBundle }) {
   const data = bundle.byDay.all;
-  const vb = valueBets(data.matchups);
+  const rows = allRows(data.matchups, data.props);
+  const [kind, setKind] = useState<"all" | BetRow["kind"]>("all");
+  const shown = rows.filter((r) => kind === "all" || r.kind === kind).slice(0, 25);
   return (
     <>
-      <Title kicker="Best bets" title="Where a book is paying too much" sub="A book's price beats the fair price from the consensus of every sportsbook we track, by at least a point. EV is the average return per bet. Real edges are small and rare, so expect a handful a week." />
-      {vb.length ? <EvPicksTable picks={vb} matchups={data.matchups} title={`${vb.length} value ${vb.length === 1 ? "bet" : "bets"}`} />
-        : <Empty text="No book is beating the consensus by enough right now. Value shows up as lines move during the week; check back." />}
+      <Title kicker="Best bets" title="Top 25 bets this week" sub="Every game line and prop across the week, ranked by EV at the best price." />
+      <Chips value={kind} onChange={setKind} options={[["all", "All"], ["Spread", "Spreads"], ["Total", "Totals"], ["Moneyline", "Moneylines"], ["Prop", "Props"]]} />
+      <BetList rows={shown} empty="No lines posted yet." />
       {(data.locks?.length ?? 0) > 0 && <div className="mt-10"><Section title="Locks" href="/locks/" link="All locks"><LocksTable locks={data.locks!.slice(0, 5)} matchups={data.matchups} /></Section></div>}
     </>
   );
@@ -177,54 +190,29 @@ export function BestBetsView({ bundle }: { bundle: LiveBundle }) {
 
 // ---------------- Props ----------------
 
-export function PropsTable({ props, cards }: { props: PlayerProp[]; cards: MatchupCardData[] }) {
-  const game = new Map(cards.map((c) => [c.matchup.id, c.matchup]));
-  return (
-    <div className="overflow-x-auto rounded-lg border border-slate-line bg-white">
-      <table className="w-full min-w-[600px] text-sm">
-        <thead><tr className="border-b border-slate-line bg-slate-raised text-left text-xs text-muted-foreground">
-          <th className="px-3 py-2 font-semibold">Player</th><th className="px-3 py-2 font-semibold">Bet</th>
-          <th className="px-3 py-2 text-right font-semibold">Best price</th><th className="px-3 py-2 text-right font-semibold">Fair</th><th className="px-3 py-2 text-right font-semibold">EV</th>
-        </tr></thead>
-        <tbody>
-          {props.map((p) => {
-            const g = game.get(p.matchupId);
-            const ev = propEv(p);
-            return (
-              <tr key={p.id} className="border-b border-slate-line last:border-0">
-                <td className="px-3 py-2.5"><div className="font-semibold">{p.playerName}</div>{g && cards.length > 1 && <div className="text-xs text-muted-foreground">{g.away.shortName} @ {g.home.shortName}</div>}</td>
-                <td className="px-3 py-2.5">{p.side === "over" ? "Over" : "Under"} {p.line} {p.statLabel.toLowerCase()}</td>
-                <td className="px-3 py-2.5 text-right tabular-nums"><b>{fmtAmerican(p.bestQuote.americanOdds)}</b><div className="text-xs text-muted-foreground">{p.bestQuote.bookmaker.name}</div></td>
-                <td className="px-3 py-2.5 text-right tabular-nums text-muted-foreground">{fmtPct(p.modelProb, 0)}</td>
-                <td className={cn("px-3 py-2.5 text-right font-bold tabular-nums", ev >= 0 ? "text-neon" : "text-loss")}>{ev >= 0 ? "+" : ""}{(ev * 100).toFixed(1)}%</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
 
 export function PropsView({ bundle }: { bundle: LiveBundle }) {
   const data = bundle.byDay.all;
   const games = open(data.matchups);
-  const props = bookProps(data.props).filter((p) => games.some((c) => c.matchup.id === p.matchupId));
-  const edges = props.filter((p) => p.edge >= PROP_MIN_EDGE).sort((a, b) => propEv(b) - propEv(a));
-  const loaded = new Set(props.map((p) => p.matchupId));
+  const all = byEv(propRows(data.props, games));
+  const loaded = games.filter((c) => all.some((r) => r.card.matchup.id === c.matchup.id));
+  const [game, setGame] = useState("all");
+  const shown = all.filter((r) => game === "all" || r.card.matchup.id === game);
   return (
     <>
-      <Title kicker="Player props" title="Prop prices across the books" sub="Passing yards and TDs, rushing yards, receiving yards and receptions. The fair price comes from every book's line together, so an edge means one book is out of step. Each game's props load once, the day before or the morning of kickoff." />
+      <Title kicker="Player props" title="Every prop, ranked" sub="Passing, rushing and receiving props from the sportsbooks, best EV first." />
       <LoadPropsButton />
-      <p className="mb-6 text-sm text-muted-foreground">Props loaded for <b className="text-ink">{loaded.size}</b> of {games.length} games this week.</p>
-      <Section title="Prop edges">
-        {edges.length ? <PropsTable props={edges} cards={games} /> : <Empty text="No prop is priced 2+ points above fair right now." />}
-      </Section>
+      {loaded.length > 0 && (
+        <Chips value={game} onChange={setGame}
+          options={[["all", `All games (${all.length})`], ...loaded.map((c) => [c.matchup.id, `${c.matchup.away.shortName} @ ${c.matchup.home.shortName}`] as [string, string])]} />
+      )}
+      <BetList rows={shown} empty={`No props loaded yet: they load at 9 AM Central for games in the next 36 hours (${loaded.length} of ${games.length} games so far).`} />
       {(data.tdDerby?.length ?? 0) > 0 && (
-        <Section title="Anytime TD (our model)">
-          <p className="mb-3 text-xs text-muted-foreground">From our own player model, not the books: a guide to fair prices. Only bet one when a book pays more than the fair price shown.</p>
-          <TdDerby list={data.tdDerby!.slice(0, 30)} modelOnly />
-        </Section>
+        <div className="mt-10">
+          <Section title="Anytime TD chances">
+            <TdDerby list={data.tdDerby!.slice(0, 30)} modelOnly />
+          </Section>
+        </div>
       )}
     </>
   );
