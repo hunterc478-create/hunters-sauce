@@ -14,7 +14,7 @@ const nextConfig: NextConfig = {
   assetPrefix: basePath || undefined,
   images: { unoptimized: true },
   // client code fetching /data/*.json needs the same prefix
-  env: { NEXT_PUBLIC_BASE_PATH: basePath },
+  env: { NEXT_PUBLIC_BASE_PATH: basePath, NEXT_PUBLIC_REPO: process.env.GITHUB_REPOSITORY ?? "" },
 };
 
 export default nextConfig;

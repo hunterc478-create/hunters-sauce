@@ -12,6 +12,7 @@ import { LocksTable } from "@/components/dashboard/locks-table";
 import { TdDerby } from "@/components/dashboard/td-derby";
 import { GameRow } from "@/components/board/game-row";
 import { GameTile, TEASER_BREAKEVEN, TEASER_LEG_MIN, TeamLogo } from "./game-tile";
+import { LoadPropsButton } from "./load-props";
 
 const open = (cards: MatchupCardData[]) => cards.filter((c) => c.matchup.status !== "final" && c.matchup.league === "NFL");
 const valueBets = (cards: MatchupCardData[]) => open(cards).flatMap((c) => [c.recommended, ...c.otherBets].filter((b) => isValueBet(b, "NFL")))
@@ -133,6 +134,7 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
       <Section title="Player props">
         {props.length ? <PropsTable props={props} cards={[card]} />
           : <Empty text="Sportsbook props for this game load at 9 AM Central the day before or the day of kickoff." />}
+        <LoadPropsButton compact />
       </Section>
 
       {td.length > 0 && (
@@ -213,6 +215,7 @@ export function PropsView({ bundle }: { bundle: LiveBundle }) {
   return (
     <>
       <Title kicker="Player props" title="Prop prices across the books" sub="Passing yards and TDs, rushing yards, receiving yards and receptions. The fair price comes from every book's line together, so an edge means one book is out of step. Each game's props load once, the day before or the morning of kickoff." />
+      <LoadPropsButton />
       <p className="mb-6 text-sm text-muted-foreground">Props loaded for <b className="text-ink">{loaded.size}</b> of {games.length} games this week.</p>
       <Section title="Prop edges">
         {edges.length ? <PropsTable props={edges} cards={games} /> : <Empty text="No prop is priced 2+ points above fair right now." />}
