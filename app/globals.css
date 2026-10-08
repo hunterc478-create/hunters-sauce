@@ -1,0 +1,34 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Hunter's Sportsbook: paper #F6F5F2, cards white, ink #111, brand red #C8102E, value green #13804A */
+    --background: 45 14% 96%;
+    --foreground: 0 0% 7%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 7%;
+    --primary: 351 85% 42%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 40 13% 93%;
+    --secondary-foreground: 0 0% 7%;
+    --muted: 40 13% 93%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 40 13% 93%;
+    --accent-foreground: 0 0% 7%;
+    --destructive: 4 76% 40%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 40 11% 87%;
+    --input: 40 11% 87%;
+    --ring: 351 85% 42%;
+    --radius: 0.5rem;
+    color-scheme: light;
+  }
+  * { @apply border-border; }
+  body { @apply bg-obsidian text-foreground antialiased; font-feature-settings: "ss01", "cv11"; }
+  :focus-visible { @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-obsidian; }
+  /* numbers line up in columns everywhere */
+  .tabular-nums, table { font-variant-numeric: tabular-nums; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+}
