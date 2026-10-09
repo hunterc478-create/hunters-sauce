@@ -155,7 +155,8 @@ export async function getGames(league: LeagueId, startYmd: string, endYmd: strin
 }
 
 /** Moneyline / spread / total from every sportsbook ESPN lists for the game, merged into MarketOutcomes. */
-export async function getOdds(league: LeagueId, g: EspnGame, hasDraw: boolean): Promise<MarketOutcome[]> {
+/** `closing`: for games already under way, read each book's closing (last pregame) line rather than a live one. */
+export async function getOdds(league: LeagueId, g: EspnGame, hasDraw: boolean, closing = false): Promise<MarketOutcome[]> {
   const cfg = ESPN_PATHS[league];
   if (!cfg) return [];
   const [sport, lg] = cfg.path.split("/");
@@ -184,13 +185,16 @@ export async function getOdds(league: LeagueId, g: EspnGame, hasDraw: boolean): 
     const book = str(dig(it, "provider", "name")) ?? "Sportsbook";
     if (/live|consensus|projection|numberfire|teamrankings/i.test(book)) continue;
     const H = obj(it.homeTeamOdds), A = obj(it.awayTeamOdds);
-    const cur = (p: string[]) => dig(it, ...p, "current", "odds") ?? dig(it, ...p, "close", "odds") ?? dig(it, ...p, "open", "odds");
-    add("moneyline", "home", `${m.home.shortName} ML`, price(H.moneyLine ?? cur(["moneyline", "home"])), undefined, book);
-    add("moneyline", "away", `${m.away.shortName} ML`, price(A.moneyLine ?? cur(["moneyline", "away"])), undefined, book);
-    if (hasDraw) add("moneyline", "draw", "Draw", price(dig(it, "drawOdds", "moneyLine") ?? cur(["moneyline", "draw"])), undefined, book);
+    // the top-level fields are the book's current number; for a game under way that's a live line, so use the close
+    const order = closing ? ["close", "current", "open"] : ["current", "close", "open"];
+    const cur = (p: string[], f = "odds") => order.map((k) => dig(it, ...p, k, f)).find((v) => v !== undefined);
+    const top = <T,>(v: T) => (closing ? undefined : v);
+    add("moneyline", "home", `${m.home.shortName} ML`, price(top(H.moneyLine) ?? cur(["moneyline", "home"]) ?? H.moneyLine), undefined, book);
+    add("moneyline", "away", `${m.away.shortName} ML`, price(top(A.moneyLine) ?? cur(["moneyline", "away"]) ?? A.moneyLine), undefined, book);
+    if (hasDraw) add("moneyline", "draw", "Draw", price(top(dig(it, "drawOdds", "moneyLine")) ?? cur(["moneyline", "draw"]) ?? dig(it, "drawOdds", "moneyLine")), undefined, book);
 
     // spread, stored from the home team's side
-    let homeLine = num(dig(it, "pointSpread", "home", "current", "line") ?? dig(it, "pointSpread", "home", "close", "line"));
+    let homeLine = num(cur(["pointSpread", "home"], "line"));
     const spreadAbs = num(it.spread);
     if (homeLine === undefined && spreadAbs !== undefined) {
       const s = Math.abs(spreadAbs);
@@ -200,13 +204,13 @@ export async function getOdds(league: LeagueId, g: EspnGame, hasDraw: boolean): 
     }
     if (homeLine !== undefined && homeLine !== 0) {
       const fmt = (x: number) => (x > 0 ? `+${x}` : `${x}`);
-      add("spread", "home", `${m.home.shortName} ${fmt(homeLine)}`, price(H.spreadOdds ?? cur(["pointSpread", "home"])), homeLine, book);
-      add("spread", "away", `${m.away.shortName} ${fmt(-homeLine)}`, price(A.spreadOdds ?? cur(["pointSpread", "away"])), -homeLine, book);
+      add("spread", "home", `${m.home.shortName} ${fmt(homeLine)}`, price(top(H.spreadOdds) ?? cur(["pointSpread", "home"]) ?? H.spreadOdds), homeLine, book);
+      add("spread", "away", `${m.away.shortName} ${fmt(-homeLine)}`, price(top(A.spreadOdds) ?? cur(["pointSpread", "away"]) ?? A.spreadOdds), -homeLine, book);
     }
-    const total = num(it.overUnder ?? dig(it, "total", "over", "current", "line") ?? dig(it, "total", "over", "close", "line"));
+    const total = num(top(it.overUnder) ?? cur(["total", "over"], "line") ?? it.overUnder);
     if (total) {
-      add("total", "over", `Over ${total}`, price(it.overOdds ?? cur(["total", "over"])), total, book);
-      add("total", "under", `Under ${total}`, price(it.underOdds ?? cur(["total", "under"])), total, book);
+      add("total", "over", `Over ${total}`, price(top(it.overOdds) ?? cur(["total", "over"]) ?? it.overOdds), total, book);
+      add("total", "under", `Under ${total}`, price(top(it.underOdds) ?? cur(["total", "under"]) ?? it.underOdds), total, book);
     }
   }
   return [...map.values()];

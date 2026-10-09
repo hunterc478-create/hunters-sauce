@@ -126,7 +126,18 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
       }
     }
   }
-  const priced = upcoming.filter((g) => g.outcomes.size > 0);
+  // games this week that already started but never made it onto the board (e.g. the site was updated after kickoff):
+  // rebuild them from ESPN with closing lines so they still show, with their live/final score
+  const weekStart = nflWeekStart(now);
+  const prevIds = new Set(previousCards.map((c) => c.matchup.id));
+  const rebuild = reg.games.filter((g) => g.matchup.league === "NFL" && (g.matchup.status === "live" || g.matchup.status === "final")
+    && new Date(g.matchup.startTime) >= weekStart && !prevIds.has(g.matchup.id) && espnByGame.has(g));
+  await pool(rebuild, 4, async (g) => {
+    for (const o of await getOdds(g.matchup.league, espnByGame.get(g)!, false, true))
+      for (const q of o.quotes) reg.addQuote(g, o.market, o.side, q.americanOdds, o.line, q.bookmaker.name);
+  });
+  if (rebuild.length) note("Started games rebuilt", true, `${rebuild.filter((g) => g.outcomes.size).length} of ${rebuild.length} from ESPN closing lines`);
+  const priced = [...upcoming.filter((g) => g.outcomes.size > 0), ...rebuild.filter((g) => g.outcomes.size > 0)];
   note("Sportsbook lines", priced.length > 0, `${priced.length} of ${upcoming.length} upcoming games priced (${new Set(priced.flatMap((g) => [...g.outcomes.values()].flatMap((o) => o.quotes.map((q) => q.bookmaker.name)))).size} books)`);
 
   // ---- 2) team strength ----
@@ -292,7 +303,6 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
 
   // ---- 3c) this week's games that have started stay on the site (frozen at their last pregame prices, with the live
   // or final score) until the NFL week ends, so their bets can show how they did
-  const weekStart = nflWeekStart(now);
   let keptGames = 0;
   for (const pc of previousCards) {
     if (cards.some((c) => c.matchup.id === pc.matchup.id) || new Date(pc.matchup.startTime) < weekStart) continue;
