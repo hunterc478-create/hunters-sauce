@@ -88,10 +88,15 @@ export class NflPlayers {
   }
 
   /** What the player actually did in his most recent game against either of these teams (for grading props). */
-  actual(player: string, stat: string, teams: string[]): number | null {
+  /**
+   * The player's stat in THIS game: both teams must match (his team and the opponent), and the week when known.
+   * Matching on either team alone used to return his previous game when this week's stats weren't posted yet.
+   */
+  actual(player: string, stat: string, teams: string[], week?: number): number | null {
     const n = norm(player);
     const key: NflStat = (stat === "touchdowns" ? "anytime_td" : stat) as NflStat;
-    const rows = this.cur.filter((r) => norm(r.name) === n && (teams.includes(r.opp) || teams.includes(r.team))).sort((a, b) => b.week - a.week);
+    const rows = this.cur.filter((r) => norm(r.name) === n && teams.includes(r.team) && teams.includes(r.opp) && (week === undefined || r.week === week))
+      .sort((a, b) => b.week - a.week);
     return rows.length ? statValue(rows[0], key) : null;
   }
 

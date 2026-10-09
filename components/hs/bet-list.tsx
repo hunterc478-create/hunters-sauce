@@ -6,13 +6,13 @@
  *   likemore  same pool, ranked by how much higher our chance is than the books'
  *   longshots +121 to +400 where our chance is 3+ points over the books'
  */
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MatchupCardData, PlayerProp, ValueBet } from "@/types/sports";
-import { legFromBet, useSlip, type Leg } from "@/lib/my-bets";
+import { gradeLeg, legFromBet, useMyBets, useSlip, type Leg, type PropResultMap, type Result } from "@/lib/my-bets";
 import { kickoff } from "@/lib/nfl";
+import { kalshiHandicap, LIKELY_MIN, LIKELY_ODDS, LONGSHOT_ODDS, mainBet, propLabel, sane } from "@/lib/ours";
 import { cn, fmtAmerican } from "@/lib/utils";
 import { TrackButton } from "@/components/dashboard/track-button";
-import { mainBet } from "./game-tile";
 
 export interface BetRow {
   key: string;
@@ -32,9 +32,6 @@ export interface BetRow {
 
 export type View = "likely" | "likemore" | "longshots";
 export const VIEWS: [View, string][] = [["likely", "Most likely to hit"], ["likemore", "We like more than the books"], ["longshots", "Longshots worth a look"]];
-
-/** A model this far from the market is missing news; no number beats a misleading one. */
-const sane = (our: number, books: number) => Math.abs(our - books) <= 0.25;
 
 const whyOfGame = (c: MatchupCardData) => c.prediction.triggers
   .filter((t) => t.category !== "venue" && t.label !== "League calibration" && t.label !== "Market consensus")
@@ -56,16 +53,6 @@ export function lineRows(c: MatchupCardData): BetRow[] {
     const our = modelGame && b.modelOnlyProb !== undefined && sane(b.modelOnlyProb, books) ? b.modelOnlyProb : undefined;
     return { key: b.id, card: c, kind, label: b.label, odds: b.bestQuote.americanOdds, book: b.bestQuote.bookmaker.name, books, our, why: why || undefined, bet: b, leg: legFromBet(b, c) };
   });
-}
-
-/** "George Kittle under 70 rec yds" for a Kalshi "70+" rung's No side; plain "Over 4.5 receptions" for book props. */
-function propLabel(p: PlayerProp): string {
-  if (p.source === "kalshi") {
-    if (p.side === "over") return `${p.playerName} ${p.statLabel}`;
-    const stat = p.statLabel.replace(/^[\d.]+\+\s*/, "");
-    return p.stat === "anytime_td" ? `${p.playerName} no TD` : `${p.playerName} under ${Math.ceil(p.line)} ${stat}`;
-  }
-  return `${p.playerName} ${p.side === "over" ? "Over" : "Under"} ${p.line} ${p.statLabel.toLowerCase()}`;
 }
 
 export function propRows(props: PlayerProp[], cards: MatchupCardData[]): BetRow[] {
@@ -90,11 +77,11 @@ export function rank(rows: BetRow[], view: View): BetRow[] {
   const seen = new Set<string>();
   const unique = rows.filter((r) => !seen.has(r.key) && seen.add(r.key));
   const ours = unique.filter((r): r is BetRow & { our: number } => r.our !== undefined);
-  const k = (r: BetRow) => (r.book === "Kalshi" ? 0.03 : 0);
+  const k = (r: BetRow) => kalshiHandicap(r.book);
   const likeMore = (r: BetRow & { our: number }) => r.our - r.books - k(r);
   if (view === "longshots")
-    return ours.filter((r) => r.odds > 120 && r.odds <= 400 && r.our >= 0.25 && r.our - r.books >= 0.03).sort((a, b) => likeMore(b) - likeMore(a));
-  const pool = ours.filter((r) => r.our >= 0.55 && r.odds >= -250 && r.odds <= 120);
+    return ours.filter((r) => r.odds >= LONGSHOT_ODDS[0] && r.odds <= LONGSHOT_ODDS[1] && r.our >= 0.25 && r.our - r.books >= 0.03).sort((a, b) => likeMore(b) - likeMore(a));
+  const pool = ours.filter((r) => r.our >= LIKELY_MIN && r.odds >= LIKELY_ODDS[0] && r.odds <= LIKELY_ODDS[1]);
   return view === "likely" ? pool.sort((a, b) => (b.our - k(b)) - (a.our - k(a)))
     : pool.filter((r) => r.our > r.books).sort((a, b) => likeMore(b) - likeMore(a));
 }
@@ -119,6 +106,36 @@ export function ViewTabs({ view, onChange }: { view: View; onChange: (v: View) =
   );
 }
 
+/** Save any selection (props, alt props) to My Bets as a straight bet; tap again to remove. */
+function TrackLegButton({ leg }: { leg: Leg }) {
+  const mine = useMyBets();
+  const on = mine.has(leg.id);
+  return (
+    <button type="button" aria-pressed={on} onClick={() => (on ? mine.remove(leg.id) : mine.addLeg(leg))}
+      className={cn("mt-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold", on ? "border-neon/60 bg-neon/10 text-neon" : "border-slate-line text-muted-foreground hover:text-ink")}>
+      {on ? "✓ Tracked" : "+ Track"}
+    </button>
+  );
+}
+
+/** Published prop results (official stats), fetched once per page. */
+export function usePropResults(): PropResultMap {
+  const [map, setMap] = useState<PropResultMap>({});
+  useEffect(() => {
+    fetch(`${process.env.NEXT_PUBLIC_BASE_PATH ?? ""}/data/prop-results.json?t=${Date.now()}`).then((r) => (r.ok ? r.json() : {})).then(setMap).catch(() => {});
+  }, []);
+  return map;
+}
+
+/** How a bet did, once its game is final: game lines from the final score, props from official stats. */
+function resultOf(r: BetRow, props: PropResultMap): Result | undefined {
+  const m = r.card.matchup;
+  if (m.status !== "final") return undefined;
+  if (r.kind === "Prop" || r.kind === "Alt prop") return props[r.key]?.r;
+  if (!m.score) return undefined;
+  return gradeLeg(r.leg, { [m.id]: { home: m.score.home, away: m.score.away, homeTeam: m.home.name, awayTeam: m.away.name, start: m.startTime } }, []);
+}
+
 function SlipButton({ leg }: { leg: Leg }) {
   const slip = useSlip();
   const [err, setErr] = useState<string | null>(null);
@@ -136,21 +153,27 @@ function SlipButton({ leg }: { leg: Leg }) {
 
 const pct = (p: number) => `${Math.round(p * 100)}%`;
 
-export function BetList({ rows, showGame = true, empty = "Nothing here yet." }: { rows: BetRow[]; showGame?: boolean; empty?: string }) {
+export function BetList({ rows, showGame = true, empty = "Nothing here yet.", results = {} }: { rows: BetRow[]; showGame?: boolean; empty?: string; results?: PropResultMap }) {
   if (!rows.length) return <p className="rounded-lg border border-dashed border-slate-line bg-slate-card p-6 text-center text-sm text-muted-foreground">{empty}</p>;
   return (
     <ol className="divide-y divide-slate-line overflow-hidden rounded-xl border border-slate-line bg-slate-card">
       {rows.map((r, i) => {
         const diff = r.our !== undefined ? r.our - r.books : 0;
+        const res = resultOf(r, results);
+        const started = r.card.matchup.status !== "scheduled";
         return (
           <li key={r.key} className="flex items-start gap-3 px-3 py-3 sm:px-4">
             <span className="w-6 shrink-0 pt-0.5 text-right text-xs font-bold tabular-nums text-muted-foreground">{i + 1}</span>
             <div className="min-w-0 flex-1">
-              <div className="font-semibold text-ink">{r.label}</div>
+              <div className="font-semibold text-ink">
+                {r.label}
+                {res && <span className={cn("ml-2 rounded px-1.5 py-0.5 text-[11px] font-bold", res === "win" ? "bg-neon/15 text-neon" : res === "loss" ? "bg-loss/15 text-loss" : "bg-slate-raised text-ink/70")}>{res === "win" ? "✓ Hit" : res === "loss" ? "✗ Missed" : "Push"}</span>}
+                {!res && started && <span className="ml-2 rounded bg-slate-raised px-1.5 py-0.5 text-[11px] font-bold text-ink/70">{r.card.matchup.status === "final" ? "Result pending" : "Live"}</span>}
+              </div>
               <div className="text-xs text-muted-foreground">{r.kind}{showGame ? ` · ${gameName(r.card)} · ${kickoff(r.card.matchup.startTime)}` : ""}</div>
               {r.why && <div className="mt-0.5 text-xs text-ink/60" title={r.why}>{shortWhy(r.why)}</div>}
               <div className="flex flex-wrap gap-1">
-                {r.bet ? <TrackButton bet={r.bet} card={r.card} /> : <SlipButton leg={r.leg} />}
+                {!started && (r.bet ? <TrackButton bet={r.bet} card={r.card} /> : <><TrackLegButton leg={r.leg} /><SlipButton leg={r.leg} /></>)}
               </div>
             </div>
             <div className="shrink-0 text-right">

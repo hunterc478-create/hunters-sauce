@@ -149,6 +149,11 @@ export function useMyBets() {
     const bet: MyBet = { ...legFromBet(b, card), kind: "single", stake: lastStake(), addedAt: new Date().toISOString() };
     save(KEY, [bet, ...load<MyBet>(KEY).filter((x) => x.id !== b.id)]);
   }, []);
+  /** Any selection (props, alt props) as a straight bet. */
+  const addLeg = useCallback((leg: Leg) => {
+    const bet: MyBet = { ...leg, result: undefined, kind: "single", stake: lastStake(), addedAt: new Date().toISOString() };
+    save(KEY, [bet, ...load<MyBet>(KEY).filter((x) => x.id !== leg.id)]);
+  }, []);
   const addParlay = useCallback((legs: Leg[], stake: number) => {
     const { american } = slipMath(legs);
     const starts = legs.map((l) => l.start).filter(Boolean).sort();
@@ -167,13 +172,16 @@ export function useMyBets() {
     save(KEY, load<MyBet>(KEY).map((x) => (x.id === id ? { ...x, ...patch } : x)));
   }, []);
 
-  return { bets, add, addParlay, remove, update, has: (id: string) => bets.some((x) => x.id === id) };
+  return { bets, add, addLeg, addParlay, remove, update, has: (id: string) => bets.some((x) => x.id === id) };
 }
 
 // ---------- automatic settling ----------
 
 /** Spread / total / moneyline from a final score. */
-export function gradeLeg(l: Leg, results: GameResults, history: TrackedPick[]): Result | undefined {
+/** Prop results the site publishes (prop-results.json), by prop id. */
+export type PropResultMap = Record<string, { r: Result }>;
+
+export function gradeLeg(l: Leg, results: GameResults, history: TrackedPick[], props: PropResultMap = {}): Result | undefined {
   const r = results[l.matchupId];
   const market = l.market === "alt_spread" ? "spread" : l.market === "alt_total" ? "total" : l.market;
   if (r && (market === "moneyline" || market === "spread" || market === "total")) {
@@ -184,22 +192,23 @@ export function gradeLeg(l: Leg, results: GameResults, history: TrackedPick[]): 
     return d > 0 ? "win" : d < 0 ? "loss" : "push";
   }
   // props: only when the site graded the same prop
+  if (props[l.id]) return props[l.id].r;   // official player stats, graded by the site
   const p = history.find((h) => h.id === `alt:${l.id}` && (h.result === "win" || h.result === "loss" || h.result === "push"));
   return p ? (p.result as Result) : undefined;
 }
 
 /** Results for open bets that can now be settled (parlays need every leg final, or any leg lost). */
-export function autoGrade(bets: MyBet[], results: GameResults, history: TrackedPick[]): { id: string; patch: Partial<MyBet> }[] {
+export function autoGrade(bets: MyBet[], results: GameResults, history: TrackedPick[], props: PropResultMap = {}): { id: string; patch: Partial<MyBet> }[] {
   const out: { id: string; patch: Partial<MyBet> }[] = [];
   for (const b of bets) {
     if (b.result) continue;
     if (b.kind === "parlay" && b.legs) {
-      const legs = b.legs.map((l) => ({ ...l, result: l.result ?? gradeLeg(l, results, history) }));
+      const legs = b.legs.map((l) => ({ ...l, result: l.result ?? gradeLeg(l, results, history, props) }));
       const res: Result | undefined = legs.some((l) => l.result === "loss") ? "loss"
         : legs.every((l) => l.result) ? (legs.every((l) => l.result === "push") ? "push" : "win") : undefined;
       if (res || legs.some((l, i) => l.result !== b.legs![i].result)) out.push({ id: b.id, patch: { legs, ...(res ? { result: res, auto: true } : {}) } });
     } else {
-      const res = gradeLeg(b, results, history);
+      const res = gradeLeg(b, results, history, props);
       if (res) out.push({ id: b.id, patch: { result: res, auto: true } });
     }
   }

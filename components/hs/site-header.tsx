@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Activity, CalendarDays, Layers, ListChecks, Lock, MoreHorizontal, Repeat, Star, Wallet } from "lucide-react";
+import { Activity, CalendarDays, Layers, ListChecks, Lock, MoreHorizontal, Repeat, Star, Trophy, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Item = { href: string; label: string; icon: typeof Star };
@@ -14,6 +14,7 @@ const NAV: Item[] = [
   { href: "/locks", label: "Locks", icon: Lock },
   { href: "/parlays", label: "Parlays", icon: ListChecks },
   { href: "/my-bets", label: "My Bets", icon: Wallet },
+  { href: "/our-picks", label: "Our Picks", icon: Trophy },
   { href: "/tracker", label: "Record", icon: Activity },
 ];
 const TABS = NAV.filter((n) => ["/", "/best-bets", "/props", "/my-bets"].includes(n.href));

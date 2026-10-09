@@ -7,7 +7,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import type { GameResults, TrackedPick } from "@/types/sports";
-import { buildLive } from "@/lib/live/build";
+import { buildLive, type PropResults } from "@/lib/live/build";
 import type { LiveBundle } from "@/lib/live/assemble";
 import { notifyNewPicks } from "@/lib/live/notify";
 import { applyOpeners, type Openers } from "@/lib/live/openers";
@@ -27,7 +27,7 @@ async function main() {
   const prevHistory = (SITE && (await fetchJson<TrackedPick[]>(`${SITE}/data/history.json`))) || [];
   const prevBundle = SITE ? await fetchJson<LiveBundle>(`${SITE}/data/live.json`) : null;
 
-  const { bundle, history, results } = await buildLive(prevHistory, prevBundle?.byDay?.all?.props ?? [], prevBundle?.propsLoadedAt);
+  const { bundle, history, results, propResults } = await buildLive(prevHistory, prevBundle?.byDay?.all?.props ?? [], prevBundle?.propsLoadedAt, prevBundle?.byDay?.all?.matchups ?? []);
   let out = bundle;
   if (!bundle.byDay.all.matchups.length && prevBundle?.byDay?.all?.matchups?.length) {
     console.log("No games priced this run; keeping the last good board.");
@@ -47,6 +47,9 @@ async function main() {
   const cutoff = Date.now() - 14 * 86_400_000;
   const keep = Object.fromEntries(Object.entries({ ...prevResults, ...results }).filter(([, r]) => new Date(r.start).getTime() > cutoff));
   fs.writeFileSync(path.join("public", "data", "results.json"), JSON.stringify(keep));
+  const prevProps = (SITE && (await fetchJson<PropResults>(`${SITE}/data/prop-results.json`))) || {};
+  const keepProps = Object.fromEntries(Object.entries({ ...prevProps, ...propResults }).filter(([, r]) => new Date(r.start).getTime() > Date.now() - 21 * 86_400_000));
+  fs.writeFileSync(path.join("public", "data", "prop-results.json"), JSON.stringify(keepProps));
 
   const alerts = await notifyNewPicks(prevHistory, history, SITE);
   if (alerts) console.log(`Phone alerts sent: ${alerts}`);

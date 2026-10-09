@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 import type { GameResults, TrackedPick } from "@/types/sports";
-import { autoGrade, profitOf, useMyBets, type MyBet } from "@/lib/my-bets";
+import { autoGrade, profitOf, useMyBets, type MyBet, type PropResultMap } from "@/lib/my-bets";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -20,9 +20,9 @@ export function MyBetsView() {
     const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
     const get = <T,>(f: string, empty: T) => fetch(`${base}/data/${f}?t=${Date.now()}`).then((r) => (r.ok ? r.json() : empty)).catch(() => empty) as Promise<T>;
     let cancelled = false;
-    Promise.all([get<GameResults>("results.json", {}), get<TrackedPick[]>("history.json", [])]).then(([results, history]) => {
+    Promise.all([get<GameResults>("results.json", {}), get<TrackedPick[]>("history.json", []), get<PropResultMap>("prop-results.json", {})]).then(([results, history, props]) => {
       if (cancelled) return;
-      for (const g of autoGrade(bets, results, history)) update(g.id, g.patch);
+      for (const g of autoGrade(bets, results, history, props)) update(g.id, g.patch);
     });
     return () => { cancelled = true; };
   }, [openCount > 0]);
@@ -37,7 +37,7 @@ export function MyBetsView() {
 
   return (
     <>
-      <PageHeader title="My bets" subtitle="Bets you've tracked with + Track, and parlays saved from the parlay slip. Spreads, totals and moneylines settle automatically from final scores. Saved in this browser only, so they won't show on your other devices." />
+      <PageHeader title="My bets" subtitle="Bets you've tracked with + Track, and parlays saved from the parlay slip. Spreads, totals and moneylines settle automatically from final scores; props from official player stats (usually the morning after). Saved in this browser only, so they won't show on your other devices." />
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Record" value={`${wins}-${losses}`} />
         <Stat label="Profit" value={money(profit)} tone={profit < 0 ? "text-loss" : profit > 0 ? "text-neon" : ""} />

@@ -38,7 +38,7 @@ export function GameTile({ card }: { card: MatchupCardData }) {
       style={{ background: `linear-gradient(135deg, ${alpha(teamColor(m.away.abbreviation), 0.16)} 0%, #17191E 45%, #17191E 55%, ${alpha(teamColor(m.home.abbreviation), 0.16)} 100%)` }}>
       <span aria-hidden className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${teamColor(m.away.abbreviation)} 0 50%, ${teamColor(m.home.abbreviation)} 50% 100%)` }} />
       <div className="mb-3 flex items-center justify-between gap-2 text-xs text-muted-foreground">
-        <span>{m.status === "live" ? <b className="text-loss">LIVE</b> : kickoff(m.startTime)}</span>
+        <span>{m.status === "live" ? <b className="text-loss">LIVE</b> : m.status === "final" ? <b className="text-ink">FINAL</b> : kickoff(m.startTime)}</span>
         <span className="flex gap-1">
           {values > 0 && <span className="rounded bg-neon/10 px-1.5 py-0.5 font-bold text-neon">{values} value</span>}
           {teaser > 0 && <span className="rounded bg-brand-soft px-1.5 py-0.5 font-bold text-brand">teaser leg</span>}
@@ -49,7 +49,7 @@ export function GameTile({ card }: { card: MatchupCardData }) {
           <div key={r.side} className="flex items-center gap-3">
             <TeamLogo team={r.team} />
             <div className="min-w-0 flex-1">
-              <div className="truncate font-bold text-ink">{r.team.shortName}</div>
+              <div className="truncate font-bold text-ink">{r.team.shortName}{m.score && m.status !== "scheduled" && <span className="ml-2 tabular-nums">{m.score[r.side]}</span>}</div>
               {r.team.record && <div className="text-[11px] text-muted-foreground">{r.team.record}</div>}
             </div>
             <div className="w-16 text-right text-sm tabular-nums">

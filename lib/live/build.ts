@@ -7,7 +7,7 @@
  *   Situation:       ESPN injuries, rest from the schedule, travel and weather from Open-Meteo
  * Then: engine -> priced picks -> day-by-day bundle, plus the transparency log.
  */
-import type { GameResults, LeagueId, MarketOutcome, MatchupCardData, Prediction, TeaserLeg, MatchupFactors, OddsQuote, PlayerProp, TeamRatings, TrackedPick, ValueBet } from "@/types/sports";
+import type { GameResults, LeagueId, MarketOutcome, MatchupCardData, PickResult, Prediction, TeaserLeg, MatchupFactors, OddsQuote, PlayerProp, TeamRatings, TrackedPick, ValueBet } from "@/types/sports";
 import { LEAGUES } from "@/lib/leagues";
 import { paramsFor } from "@/lib/engine/sport-params";
 import { predict } from "@/lib/engine/probability";
@@ -48,7 +48,9 @@ const PROP_HOURS = hourSet(process.env.PROP_HOURS, "9");     // local hours (DAY
 const LINES_HOURS = hourSet(process.env.LINES_HOURS, "10,16"); // when The Odds API may backfill missing lines
 const ymd = (k: string) => k.replace(/-/g, "");
 
-export async function buildLive(previousHistory: TrackedPick[], previousProps: PlayerProp[] = [], previousPropsAt?: string): Promise<{ bundle: LiveBundle; history: TrackedPick[]; results: GameResults }> {
+export type PropResults = Record<string, { r: PickResult; start: string }>;
+
+export async function buildLive(previousHistory: TrackedPick[], previousProps: PlayerProp[] = [], previousPropsAt?: string, previousCards: MatchupCardData[] = []): Promise<{ bundle: LiveBundle; history: TrackedPick[]; results: GameResults; propResults: PropResults }> {
   const now = new Date();
   const today = dayKey(now, DAY_TZ);
   const localHour = Number(new Intl.DateTimeFormat("en-US", { timeZone: DAY_TZ, hour: "numeric", hour12: false }).format(now)) % 24;
@@ -288,10 +290,27 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   const derby = tdDerby(cards, nflPlayers, kalshiProps, outByTeam);
   if (nflPlayers) note("TD derby", derby.length > 0, `${derby.length} players ranked`);
 
+  // ---- 3c) this week's games that have started stay on the site (frozen at their last pregame prices, with the live
+  // or final score) until the NFL week ends, so their bets can show how they did
+  const weekStart = nflWeekStart(now);
+  let keptGames = 0;
+  for (const pc of previousCards) {
+    if (cards.some((c) => c.matchup.id === pc.matchup.id) || new Date(pc.matchup.startTime) < weekStart) continue;
+    const g = reg.games.find((x) => x.matchup.id === pc.matchup.id);
+    const st = g?.matchup.status;
+    if (!g || st === "postponed" || (st === "scheduled" && new Date(g.matchup.startTime) > now)) continue;
+    pc.matchup.status = st === "scheduled" ? "live" : st!;
+    pc.matchup.score = g.matchup.score ?? pc.matchup.score;
+    cards.push(pc);
+    keptGames++;
+  }
+  if (keptGames) note("Started games kept", true, `${keptGames} games this week shown with scores`);
+
   // ---- 4) props: each game once, in the window before kickoff, to fit the free 500 credits ----
-  // Games already pulled keep their props until kickoff; "Load props now" refreshes every game in the window.
+  // Games already pulled keep their props until kickoff (and after, for results); "Load props now" refreshes the window.
   const openIds = new Set(cards.filter((c) => c.matchup.status === "scheduled").map((c) => c.matchup.id));
-  const carried = previousProps.filter((p) => openIds.has(p.matchupId) && p.source !== "kalshi");   // Kalshi props refresh every run
+  const allIds = new Set(cards.map((c) => c.matchup.id));
+  const carried = previousProps.filter((p) => allIds.has(p.matchupId) && p.source !== "kalshi");   // Kalshi props refresh every run
   const pulledIds = new Set(carried.map((p) => p.matchupId));
   let props: PlayerProp[] = [];
   let propsLoadedAt = previousPropsAt;
@@ -350,7 +369,29 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   const results: GameResults = {};
   for (const g of reg.games) if (g.matchup.status === "final" && g.matchup.score)
     results[g.matchup.id] = { home: g.matchup.score.home, away: g.matchup.score.away, homeTeam: g.matchup.home.name, awayTeam: g.matchup.away.name, start: g.matchup.startTime };
-  return { bundle, history, results };
+  // prop results for finished games (official player stats, usually posted the morning after), so tracked props settle
+  const propResults: PropResults = {};
+  if (nflPlayers) for (const c of cards) {
+    if (c.matchup.status !== "final") continue;
+    const teams = [toNflverseAbbr(c.matchup.home.abbreviation), toNflverseAbbr(c.matchup.away.abbreviation)];
+    for (const p of props) {
+      if (p.matchupId !== c.matchup.id) continue;
+      const v = nflPlayers.actual(p.playerName, p.stat, teams, c.matchup.week);
+      if (v === null) continue;
+      const d = p.side === "over" ? v - p.line : p.line - v;
+      propResults[p.id] = { r: d > 0 ? "win" : d < 0 ? "loss" : "push", start: c.matchup.startTime };
+    }
+  }
+  return { bundle, history, results, propResults };
+}
+
+/** Start of the current NFL week: Tuesday ~6 AM Eastern (10:00 UTC). */
+function nflWeekStart(now: Date): Date {
+  const d = new Date(now);
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() - 2 + 7) % 7));
+  d.setUTCHours(10, 0, 0, 0);
+  if (d > now) d.setUTCDate(d.getUTCDate() - 7);
+  return d;
 }
 
 /** Team names start with the city for pro teams ("Kansas City Chiefs" -> "Kansas City"). */

@@ -407,7 +407,7 @@ export interface TrackedPick {
   placedAt: string;
   settledAt?: string;
   league: LeagueId;
-  kind: "single" | "prop" | "alt" | "parlay" | "lock";
+  kind: "single" | "prop" | "alt" | "parlay" | "lock" | "ours";
   label: string;
   americanOdds: number;
   units: number;
@@ -565,6 +565,11 @@ export interface DashboardData {
   locks?: ValueBet[];
   /** The locks' own record, kept out of trackRecord. */
   locksRecord?: TrackRecordSummary;
+  /** Our Picks: the top "most likely to hit" bets logged automatically before each kickoff window. */
+  oursRecord?: TrackRecordSummary;
+  oursCheck?: ModelCheck;
+  /** Our Picks, newest first (last 150). */
+  oursPicks?: TrackedPick[];
   /** trackRecord without parlays and props: game picks and alt lines only. */
   straightRecord?: TrackRecordSummary;
   /** Calibration and closing-line check for the current model's straight bets. */

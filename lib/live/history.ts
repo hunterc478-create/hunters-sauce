@@ -12,6 +12,7 @@ import { settleProfit } from "@/lib/engine/track-record";
 import type { LiveBundle } from "./assemble";
 import { betTypeOf, GAME_EXPOSURE, MODEL_VERSION } from "./policy";
 import { getJson } from "./http";
+import { candidates, topPicks } from "@/lib/ours";
 import { sameTeam, type Game } from "./registry";
 import { dayKey } from "./day";
 import { toNflverseAbbr, type NflPlayers } from "./players/nfl";
@@ -112,6 +113,20 @@ export async function updateHistory(prev: TrackedPick[], board: LiveBundle, card
     }
   }
 
+  // 4) Our Picks: when games enter the 2-hour window, log our top 10 "most likely to hit" across those games (max 3 a
+  // game), 1 unit each at the best price. Its own record; games already logged aren't logged again.
+  const oursIn = new Set(history.filter((p) => p.kind === "ours" && p.grade).map((p) => p.grade!.matchupId));
+  const slate = cards.filter((c) => c.matchup.status === "scheduled" && inWindow(c.matchup.startTime) && !oursIn.has(c.matchup.id));
+  if (slate.length) {
+    for (const x of topPicks(candidates(slate, board.byDay.all.props), 10, 3)) {
+      const c = card.get(x.matchupId)!;
+      const id = `ours:${x.id}`;
+      if (byId.has(id)) continue;
+      add({ ...base, id, league: c.matchup.league, kind: "ours", label: `${x.label} (${c.matchup.away.shortName} @ ${c.matchup.home.shortName})`,
+        americanOdds: x.odds, units: 1, modelProb: x.our, edgeAtPick: x.our - x.books, betType: "our picks", grade: x.grade });
+    }
+  }
+
   // ---- grading ----
   const finals = games.filter((g) => g.matchup.status === "final" && g.matchup.score).map((g) => g.matchup);
   const findFinal = (gr: GradeInfo) => finals.find((m) => m.id === gr.matchupId)
@@ -135,7 +150,7 @@ export async function updateHistory(prev: TrackedPick[], board: LiveBundle, card
       }
       const m = findFinal(gr);
       if (!m || !players || !gr.player || !gr.stat) return null;
-      const v = players.actual(gr.player, gr.stat, [toNflverseAbbr(gr.homeAbbr), toNflverseAbbr(gr.awayAbbr)]);
+      const v = players.actual(gr.player, gr.stat, [toNflverseAbbr(gr.homeAbbr), toNflverseAbbr(gr.awayAbbr)], m.week);
       if (v === null) return null;
       const d = gr.side === "over" ? v - (gr.line ?? 0) : (gr.line ?? 0) - v;
       return d > 0 ? "win" : d < 0 ? "loss" : "push";
