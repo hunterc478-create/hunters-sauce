@@ -4,7 +4,7 @@ import { GameView } from "@/components/hs/views";
 /** One static page per NFL game on the board (rebuilt with every update). */
 export const dynamicParams = false;
 export function generateStaticParams() {
-  const ids = loadBundle().byDay.all.matchups.filter((c) => c.matchup.league === "NFL").map((c) => ({ id: c.matchup.id }));
+  const ids = loadBundle().byDay.all.matchups.filter((c) => c.matchup.league === "NFL" || c.matchup.league === "NCAAF").map((c) => ({ id: c.matchup.id }));
   return ids.length ? ids : [{ id: "none" }];   // a static export needs at least one page
 }
 

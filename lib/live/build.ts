@@ -35,8 +35,8 @@ import { updateHistory } from "./history";
 import { tdDerby } from "./td-derby";
 import { impliedProb as implied, normCdf as normCdfLocal, normInv } from "@/lib/odds-math";
 
-/** Hunter's Sportsbook is NFL only. */
-const DEFAULT_LEAGUES: LeagueId[] = ["NFL"];
+/** Hunter's Sportsbook: NFL and college football. */
+const DEFAULT_LEAGUES: LeagueId[] = ["NFL", "NCAAF"];
 /** Props are pulled once per game, for games kicking off within this many hours (the day before or game day). */
 const PROP_WINDOW_H = Number(process.env.PROP_WINDOW_H ?? 36);
 const DAYS_AHEAD = Number(process.env.DAYS_AHEAD ?? 6);
@@ -130,7 +130,7 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   // rebuild them from ESPN with closing lines so they still show, with their live/final score
   const weekStart = nflWeekStart(now);
   const prevIds = new Set(previousCards.map((c) => c.matchup.id));
-  const rebuild = reg.games.filter((g) => g.matchup.league === "NFL" && (g.matchup.status === "live" || g.matchup.status === "final")
+  const rebuild = reg.games.filter((g) => (g.matchup.league === "NFL" || g.matchup.league === "NCAAF") && (g.matchup.status === "live" || g.matchup.status === "final")
     && new Date(g.matchup.startTime) >= weekStart && !prevIds.has(g.matchup.id) && espnByGame.has(g));
   await pool(rebuild, 4, async (g) => {
     for (const o of await getOdds(g.matchup.league, espnByGame.get(g)!, false, true))
@@ -289,7 +289,7 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   if (cards.some((c) => c.matchup.league === "NFL")) note("NFL line history", !!nflHistory, nflHistory ? "real results vs. the line since 2010 (for alt spreads/totals)" : "couldn't load; using the bell curve");
   if (cards.some((c) => c.matchup.league === "NFL")) note("NFL player projections", !!nflPlayers, nflPlayers ? "nflverse weekly player stats" : "couldn't load player stats");
   const kalshiProps: PlayerProp[] = [];
-  for (const lg of [...new Set(cards.map((c) => c.matchup.league))]) {
+  for (const lg of [...new Set(cards.map((c) => c.matchup.league))].filter((l) => l === "NFL")) {
     const lc = cards.filter((c) => c.matchup.league === lg);
     const res = await kalshiLadders(lg, lc, lg === "NFL" ? nflPlayers : null, outByTeam, lg === "NFL" ? nflHistory : null).catch(() => null);
     if (!res) continue;
@@ -328,7 +328,8 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   const fresh = new Set<string>();
   if (process.env.THE_ODDS_API_KEY && (forced || (PROP_HOURS.has(localHour) && firstHalf))) {
     const windowEnd = now.getTime() + PROP_WINDOW_H * 3600_000;
-    const soon = cards.filter((c) => openIds.has(c.matchup.id) && new Date(c.matchup.startTime).getTime() <= windowEnd && (forced || !pulledIds.has(c.matchup.id)))
+    // sportsbook props: NFL only (college would burn the free credits fast)
+    const soon = cards.filter((c) => c.matchup.league === "NFL" && openIds.has(c.matchup.id) && new Date(c.matchup.startTime).getTime() <= windowEnd && (forced || !pulledIds.has(c.matchup.id)))
       .sort((a, b) => a.matchup.startTime.localeCompare(b.matchup.startTime)).slice(0, PROP_GAMES);
     let loaded = 0;
     for (const c of soon) {

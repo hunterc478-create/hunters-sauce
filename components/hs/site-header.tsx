@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Activity, CalendarDays, Layers, ListChecks, Lock, MoreHorizontal, Repeat, Star, Trophy, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { LeagueSwitch } from "./league";
 
 type Item = { href: string; label: string; icon: typeof Star };
 const NAV: Item[] = [
@@ -31,13 +32,14 @@ export function SiteHeader() {
             <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-lg font-black text-obsidian">H</span>
             <span className="leading-tight">
               <span className="block text-[17px] font-black tracking-tight text-ink">Hunter&apos;s Sportsbook</span>
-              <span className="block text-[11px] text-muted-foreground">NFL odds, picks &amp; props · no bets taken here</span>
+              <span className="block text-[11px] text-muted-foreground">NFL &amp; college football · no bets taken here</span>
             </span>
           </Link>
-          <nav aria-label="Main" className="ml-auto hidden items-center gap-1 lg:flex">
+          <LeagueSwitch className="ml-auto" />
+          <nav aria-label="Main" className="hidden items-center gap-0.5 lg:flex">
             {NAV.map((n) => (
               <Link key={n.href} href={n.href} aria-current={is(n.href) ? "page" : undefined}
-                className={cn("rounded-md px-3 py-2 text-sm font-semibold transition-colors",
+                className={cn("rounded-md px-2.5 py-2 text-sm font-semibold transition-colors",
                   is(n.href) ? "bg-brand text-obsidian" : "text-ink/70 hover:bg-slate-raised hover:text-ink")}>
                 {n.label}
               </Link>

@@ -50,7 +50,9 @@ export function lineRows(c: MatchupCardData): BetRow[] {
   const why = whyOfGame(c);
   return picks.filter((p): p is [ValueBet, BetRow["kind"]] => !!p[0] && p[0].marketProb !== undefined).map(([b, kind]) => {
     const books = b.marketProb!;
-    const our = modelGame && b.modelOnlyProb !== undefined && sane(b.modelOnlyProb, books) ? b.modelOnlyProb : undefined;
+    const raw = modelGame && b.modelOnlyProb !== undefined && sane(b.modelOnlyProb, books) ? b.modelOnlyProb : undefined;
+    // College ratings are noisy (130+ teams, few games): keep 40% of the model's disagreement with the books.
+    const our = raw !== undefined && c.matchup.league === "NCAAF" ? books + 0.4 * (raw - books) : raw;
     return { key: b.id, card: c, kind, label: b.label, odds: b.bestQuote.americanOdds, book: b.bestQuote.bookmaker.name, books, our, why: why || undefined, bet: b, leg: legFromBet(b, c) };
   });
 }

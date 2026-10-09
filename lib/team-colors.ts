@@ -11,6 +11,15 @@ const COLORS: Record<string, string> = {
 };
 
 export const teamColor = (abbr?: string) => (abbr && COLORS[abbr.toUpperCase()]) || "#6B7280";
+/** ESPN's color for the team when it's bright enough to read on dark, else our NFL table, else gray. */
+export function colorOf(t: { color?: string; abbreviation?: string }, league?: string): string {
+  if (league !== "NCAAF" && t.abbreviation && COLORS[t.abbreviation.toUpperCase()]) return COLORS[t.abbreviation.toUpperCase()];
+  if (t.color) {
+    const n = parseInt(t.color.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+    if (0.2126 * r + 0.7152 * g + 0.0722 * b > 45) return t.color;   // very dark navies vanish on charcoal
+  }
+  return teamColor(t.abbreviation);
+}
 
 /** "#RRGGBB" plus an alpha (0-1) as "#RRGGBBAA". */
 export const alpha = (hex: string, a: number) => `${hex}${Math.round(a * 255).toString(16).padStart(2, "0")}`;

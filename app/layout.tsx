@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { GeistSans } from "geist/font/sans";
 import { SiteHeader } from "@/components/hs/site-header";
+import { LeagueProvider } from "@/components/hs/league";
 import { UpdateLine } from "@/components/hs/update-line";
 import { DayProvider } from "@/components/day/day-context";
 import { ParlaySlip } from "@/components/dashboard/parlay-slip";
@@ -10,7 +11,7 @@ import "./globals.css";
 const base = process.env.PAGES_BASE_PATH || "";
 export const metadata: Metadata = {
   title: "Hunter's Sportsbook",
-  description: "NFL odds, best prices across sportsbooks, value bets, props and teasers. No bets are taken here.",
+  description: "NFL and college football odds, our picks, props, parlays and teasers. No bets are taken here.",
   // home-screen app: icon, full-screen launch, and the name under the icon
   manifest: `${base}/manifest.webmanifest`,
   icons: { icon: `${base}/icon-192.png`, apple: `${base}/apple-touch-icon.png` },
@@ -24,6 +25,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={GeistSans.variable}>
       <body className="min-h-screen bg-obsidian font-sans text-ink">
+        <LeagueProvider>
         <div className="pt-[env(safe-area-inset-top)]"><SiteHeader /></div>
         <main>
           <DayProvider days={bundle.days} todayKey={bundle.todayKey}>
@@ -34,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </DayProvider>
         </main>
         <ParlaySlip />
+        </LeagueProvider>
       </body>
     </html>
   );

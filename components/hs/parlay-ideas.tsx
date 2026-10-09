@@ -35,11 +35,15 @@ function deal(pool: (BetRow & { our: number })[], n: number, rand: () => number)
   return legs.length === n ? legs : null;
 }
 
-export function ParlayIdeas({ rows, seed, count = 8 }: { rows: BetRow[]; seed: string; count?: number }) {
+/** Moneyline parlays: teams our model rates 55%+ to win, priced -400 to +120 (stacked favorites still pay). */
+const mlPool = (rows: BetRow[]) => rows.filter((r): r is BetRow & { our: number } => r.kind === "Moneyline" && r.our !== undefined && r.our >= 0.55 && r.odds >= -400 && r.odds <= 120)
+  .sort((a, b) => b.our - a.our);
+
+export function ParlayIdeas({ rows, seed, count = 8, mode = "mixed" }: { rows: BetRow[]; seed: string; count?: number; mode?: "mixed" | "ml" }) {
   const [shuffles, setShuffles] = useState(0);
   const slip = useSlip();
   const [added, setAdded] = useState<number | null>(null);
-  const pool = useMemo(() => rank(rows, "likely") as (BetRow & { our: number })[], [rows]);
+  const pool = useMemo(() => (mode === "ml" ? mlPool(rows) : rank(rows, "likely") as (BetRow & { our: number })[]), [rows, mode]);
   const parlays = useMemo(() => {
     const rand = rng(hash(seed) + shuffles * 7919);
     const out: (BetRow & { our: number })[][] = [];
@@ -61,7 +65,7 @@ export function ParlayIdeas({ rows, seed, count = 8 }: { rows: BetRow[]; seed: s
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">Legs from different games, each one our model rates 55%+ to hit.</p>
+        <p className="text-xs text-muted-foreground">{mode === "ml" ? "Moneylines from different games, each team our model rates 55%+ to win." : "Legs from different games, each one our model rates 55%+ to hit."}</p>
         <button type="button" onClick={() => { setShuffles(shuffles + 1); setAdded(null); }} className="inline-flex items-center gap-1.5 rounded-md border border-slate-line px-3 py-1.5 text-xs font-bold hover:bg-slate-raised">
           <Shuffle className="h-3.5 w-3.5" /> Shuffle
         </button>
@@ -80,7 +84,7 @@ export function ParlayIdeas({ rows, seed, count = 8 }: { rows: BetRow[]; seed: s
               <ol className="space-y-1.5 text-sm">
                 {legs.map((l) => (
                   <li key={l.key} className="flex items-start justify-between gap-2">
-                    <span className="min-w-0"><span className="font-semibold">{l.label}</span><span className="block text-[11px] text-muted-foreground">{l.card.matchup.away.shortName} @ {l.card.matchup.home.shortName} · {l.kind} · {l.book}</span></span>
+                    <span className="min-w-0"><span className="font-semibold">{l.label}</span><span className="block text-[11px] text-muted-foreground">{l.card.matchup.league === "NCAAF" ? "College · " : ""}{l.card.matchup.away.shortName} @ {l.card.matchup.home.shortName} · {l.kind} · {l.book}</span></span>
                     <span className="shrink-0 text-right tabular-nums"><b>{fmtAmerican(l.odds)}</b><span className="block text-[11px] text-muted-foreground">{Math.round(l.our * 100)}%</span></span>
                   </li>
                 ))}

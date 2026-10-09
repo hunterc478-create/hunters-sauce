@@ -80,6 +80,8 @@ export class Registry {
       if (m.score && (!ex.matchup.score || rank[m.status] >= rank[ex.matchup.status])) ex.matchup.score = m.score;
       ex.matchup.venue ??= m.venue;
       ex.matchup.week ??= m.week;
+      ex.matchup.home.logoUrl ??= m.home.logoUrl; ex.matchup.away.logoUrl ??= m.away.logoUrl;
+      ex.matchup.home.color ??= m.home.color; ex.matchup.away.color ??= m.away.color;
       ex.matchup.home.record ??= m.home.record;
       ex.matchup.away.record ??= m.away.record;
       ex.matchup.home.abbreviation ??= m.home.abbreviation;

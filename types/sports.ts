@@ -50,6 +50,8 @@ export interface Competitor {
   shortName: string;
   abbreviation?: string;
   logoUrl?: string;
+  /** Team color as "#RRGGBB" (from ESPN). */
+  color?: string;
   record?: string; // "7-2", "18-4-1", "23-1 (MMA)"
 }
 

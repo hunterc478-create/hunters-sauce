@@ -46,6 +46,8 @@ const price = (v: unknown): number | undefined => {
   const n = num(v);
   return n === undefined || (n > -100 && n < 100) ? undefined : Math.round(n);
 };
+/** ESPN colors come as "002244"; "000000"/"ffffff" are placeholders, so they're dropped. */
+const hex = (v: unknown): string | undefined => { const s = str(v); return s && /^[0-9a-f]{6}$/i.test(s) && !/^(000000|ffffff)$/i.test(s) ? `#${s}` : undefined; };
 const dig = (o: unknown, ...path: string[]): unknown => path.reduce<unknown>((x, k) => obj(x)[k], o);
 
 export interface EspnGame {
@@ -129,8 +131,8 @@ export async function getGames(league: LeagueId, startYmd: string, endYmd: strin
       startTime: str(e.date) ?? new Date().toISOString(),
       status,
       week: num(dig(e, "week", "number")),
-      home: { id: str(team(home).id) ?? "home", name: str(team(home).displayName) ?? "Home", shortName: str(team(home).shortDisplayName) ?? str(team(home).name) ?? "Home", abbreviation: str(team(home).abbreviation), record: record(home) },
-      away: { id: str(team(away).id) ?? "away", name: str(team(away).displayName) ?? "Away", shortName: str(team(away).shortDisplayName) ?? str(team(away).name) ?? "Away", abbreviation: str(team(away).abbreviation), record: record(away) },
+      home: { id: str(team(home).id) ?? "home", name: str(team(home).displayName) ?? "Home", shortName: str(team(home).shortDisplayName) ?? str(team(home).name) ?? "Home", abbreviation: str(team(home).abbreviation), record: record(home), logoUrl: str(team(home).logo), color: hex(team(home).color) },
+      away: { id: str(team(away).id) ?? "away", name: str(team(away).displayName) ?? "Away", shortName: str(team(away).shortDisplayName) ?? str(team(away).name) ?? "Away", abbreviation: str(team(away).abbreviation), record: record(away), logoUrl: str(team(away).logo), color: hex(team(away).color) },
       venue: venue.fullName ? { name: str(venue.fullName)!, city: str(dig(venue, "address", "city")) ?? "", indoor: venue.indoor === true } : undefined,
       neutralSite: comp.neutralSite === true,
       score: status !== "scheduled" && scoreOf(home) !== undefined ? { home: scoreOf(home)!, away: scoreOf(away) ?? 0, clock: str(st.shortDetail) } : undefined,
