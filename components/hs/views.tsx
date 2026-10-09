@@ -380,7 +380,7 @@ export function OurPicksPage({ bundle }: { bundle: LiveBundle }) {
   return (
     <>
       {league !== "NFL" && <NflOnly what="Our Picks" />}
-      <Title kicker="Our picks" title="Our record" sub="About 2 hours before each kickoff window, the site logs its top 10 most-likely-to-hit bets (max 3 per game), 1 unit each at the best price, and grades them automatically. Separate from your bets." />
+      <Title kicker="Our picks" title="Our record" sub="About 2 hours before each game, the site logs that game's top 5 most-likely-to-hit bets, 1 unit each at the best price, and grades them automatically. Separate from your bets." />
       <div className="mb-8 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {tiles.map((t) => (
           <div key={t.k} className="rounded-xl border border-slate-line bg-slate-card p-4">

@@ -113,12 +113,12 @@ export async function updateHistory(prev: TrackedPick[], board: LiveBundle, card
     }
   }
 
-  // 4) Our Picks: when games enter the 2-hour window, log our top 10 "most likely to hit" across those games (max 3 a
-  // game), 1 unit each at the best price. Its own record; games already logged aren't logged again.
+  // 4) Our Picks: when a game enters the 2-hour window, log its top 5 "most likely to hit" bets,
+  // 1 unit each at the best price. Its own record; games already logged aren't logged again.
   const oursIn = new Set(history.filter((p) => p.kind === "ours" && p.grade).map((p) => p.grade!.matchupId));
   const slate = cards.filter((c) => c.matchup.league === "NFL" && c.matchup.status === "scheduled" && inWindow(c.matchup.startTime) && !oursIn.has(c.matchup.id));
   if (slate.length) {
-    for (const x of topPicks(candidates(slate, board.byDay.all.props), 10, 3)) {
+    for (const x of topPicks(candidates(slate, board.byDay.all.props), slate.length * 5, 5)) {
       const c = card.get(x.matchupId)!;
       const id = `ours:${x.id}`;
       if (byId.has(id)) continue;
