@@ -345,15 +345,15 @@ export function TeasersView({ bundle }: { bundle: LiveBundle }) {
 export function ParlaysPage({ bundle }: { bundle: LiveBundle }) {
   const data = bundle.byDay.all;
   const { league } = useLeague();
-  const [mode, setMode] = useState<"mixed" | "ml">("mixed");
+  const [mode, setMode] = useState<"mixed" | "sure" | "ml">("mixed");
   const rows = allRows(data.matchups, data.props, league);
   const mlRows = [...allRows(data.matchups, data.props, "NFL"), ...allRows(data.matchups, data.props, "NCAAF")].filter((r) => r.kind === "Moneyline");
   return (
     <>
       <Title kicker="Parlays" title="Parlay ideas" sub="A fresh set every update from legs our model likes. Shuffle for more, or tap Add to slip to edit one." />
-      <Chips value={mode} onChange={setMode} options={[["mixed", `Mixed · ${lgName(league)}`], ["ml", "Moneylines only · NFL + College"]]} />
-      {mode === "mixed"
-        ? <ParlayIdeas rows={rows} seed={bundle.generatedAt + league} count={10} />
+      <Chips value={mode} onChange={setMode} options={[["mixed", `Mixed · ${lgName(league)}`], ["sure", `Most confident · ${lgName(league)}`], ["ml", "Moneylines only · NFL + College"]]} />
+      {mode === "mixed" ? <ParlayIdeas rows={rows} seed={bundle.generatedAt + league} count={10} />
+        : mode === "sure" ? <ParlayIdeas rows={rows} seed={bundle.generatedAt} count={10} mode="sure" />
         : <ParlayIdeas rows={mlRows} seed={bundle.generatedAt + "ml"} count={10} mode="ml" />}
     </>
   );
