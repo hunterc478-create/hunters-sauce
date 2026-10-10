@@ -10,12 +10,12 @@ import "./globals.css";
 
 const base = process.env.PAGES_BASE_PATH || "";
 export const metadata: Metadata = {
-  title: "Hunter's Sportsbook",
+  title: "Hunter's Sauce",
   description: "NFL and college football odds, our picks, props, parlays and teasers. No bets are taken here.",
   // home-screen app: icon, full-screen launch, and the name under the icon
   manifest: `${base}/manifest.webmanifest`,
   icons: { icon: `${base}/icon-192.png`, apple: `${base}/apple-touch-icon.png` },
-  appleWebApp: { capable: true, title: "Hunter's", statusBarStyle: "black-translucent" },
+  appleWebApp: { capable: true, title: "Hunter's Sauce", statusBarStyle: "black-translucent" },
 };
 export const viewport: Viewport = { themeColor: "#0E0F12", width: "device-width", initialScale: 1, viewportFit: "cover" };
 

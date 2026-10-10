@@ -2,7 +2,7 @@
 import { useState } from "react";
 
 /** The repo whose "Deploy to GitHub Pages" workflow loads props (GitHub sets GITHUB_REPOSITORY during the build). */
-const REPO = process.env.NEXT_PUBLIC_REPO || "InstantHunter-11/hunters-sportsbook";
+const REPO = process.env.NEXT_PUBLIC_REPO || "hunterc478-create/hunters-sauce";
 
 /**
  * "Load props now": opens the workflow's Run page on GitHub (sign-in required there). A static public site can't

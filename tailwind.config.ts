@@ -18,7 +18,7 @@ const config: Config = {
         accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
         destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
         card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
-        // Hunter's Sportsbook v2: dark charcoal with team colors carrying the color; orange is the brand
+        // Hunter's Sauce v2: dark charcoal with team colors carrying the color; orange is the brand
         // (header, active tabs, buttons); green marks good numbers; losses red. v1 token names kept for shared parts.
         obsidian: "#0E0F12",
         ink: "#F3F4F6",

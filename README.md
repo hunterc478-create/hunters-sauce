@@ -1,7 +1,7 @@
-# Hunter's Sportsbook
+# Hunter's Sauce
 
 NFL odds, best prices across the sportsbooks, value bets, player props and teasers.
-**Not a sportsbook: no bets are taken here.** Live at `https://instanthunter-11.github.io/hunters-sportsbook/`.
+**Not a sportsbook: no bets are taken here.** Live at `https://hunterc478-create.github.io/hunters-sauce/`.
 
 Built with Next.js 15 (static export), TypeScript and Tailwind, hosted free on GitHub Pages. GitHub Actions rebuilds
 the data and the site about every 30 minutes (`.github/workflows/deploy.yml`).

@@ -29,9 +29,9 @@ export function SiteHeader() {
       <header className="sticky top-0 z-30 border-b border-slate-line bg-obsidian/95 backdrop-blur">
         <div className="mx-auto flex max-w-[1200px] items-center gap-6 px-4 py-3 sm:px-6">
           <Link href="/" className="flex shrink-0 items-center gap-2.5">
-            <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-lg font-black text-obsidian">H</span>
+            <span className="grid h-9 w-9 place-items-center rounded-md bg-brand text-[15px] font-black tracking-tighter text-obsidian">HS</span>
             <span className="leading-tight">
-              <span className="block text-[17px] font-black tracking-tight text-ink">Hunter&apos;s Sportsbook</span>
+              <span className="block text-[17px] font-black tracking-tight text-ink">Hunter&apos;s Sauce</span>
               <span className="block text-[11px] text-muted-foreground">NFL &amp; college football · no bets taken here</span>
             </span>
           </Link>

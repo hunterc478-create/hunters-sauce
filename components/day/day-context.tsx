@@ -5,7 +5,7 @@ interface DayState { day: string; setDay: (d: string) => void; days: string[]; t
 const Ctx = createContext<DayState | null>(null);
 const STORE = "ea-day";
 
-/** Hunter's Sportsbook works in NFL weeks: every page shows the whole week. */
+/** Hunter's Sauce works in NFL weeks: every page shows the whole week. */
 function pickDefault(_days: string[], _today: string) {
   return "all";
 }

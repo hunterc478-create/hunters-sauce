@@ -10,7 +10,7 @@ import { EdgePill } from "./edge-pill";
 type Mode = "likely" | "value" | "longshots";
 
 /**
- * `modelOnly` (Hunter's Sportsbook): show each player's chance and fair price but no "value" tab or edge, since the
+ * `modelOnly` (Hunter's Sauce): show each player's chance and fair price but no "value" tab or edge, since the
  * chances come from our own player model, not the books, and haven't proven themselves.
  */
 export function TdDerby({ list, modelOnly = false }: { list: TdCandidate[]; modelOnly?: boolean }) {

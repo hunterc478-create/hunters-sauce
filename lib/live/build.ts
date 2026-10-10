@@ -35,7 +35,7 @@ import { updateHistory } from "./history";
 import { tdDerby } from "./td-derby";
 import { impliedProb as implied, normCdf as normCdfLocal, normInv } from "@/lib/odds-math";
 
-/** Hunter's Sportsbook: NFL and college football. */
+/** Hunter's Sauce: NFL and college football. */
 const DEFAULT_LEAGUES: LeagueId[] = ["NFL", "NCAAF"];
 /** Props are pulled once per game, for games kicking off within this many hours (the day before or game day). */
 const PROP_WINDOW_H = Number(process.env.PROP_WINDOW_H ?? 36);

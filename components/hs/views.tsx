@@ -1,5 +1,5 @@
 "use client";
-/** Hunter's Sportsbook pages: This Week, a page per game, Best Bets, Props, Teasers. */
+/** Hunter's Sauce pages: This Week, a page per game, Best Bets, Props, Teasers. */
 import { useState } from "react";
 import Link from "next/link";
 import type { MatchupCardData, PlayerProp, TeaserLeg } from "@/types/sports";

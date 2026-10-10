@@ -1,7 +1,7 @@
 {
-  "name": "Hunter's Sportsbook",
-  "short_name": "Hunter's",
-  "description": "NFL odds, best prices across sportsbooks, value bets, props and teasers. No bets taken here.",
+  "name": "Hunter's Sauce",
+  "short_name": "Hunter's Sauce",
+  "description": "NFL and college football odds, picks, props and parlays. No bets taken here.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
