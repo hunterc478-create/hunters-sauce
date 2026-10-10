@@ -9,7 +9,7 @@ import { Shuffle } from "lucide-react";
 import { useSlip } from "@/lib/my-bets";
 import { parlayDecimal } from "@/lib/odds-math";
 import { cn, fmtAmerican } from "@/lib/utils";
-import { rank, type BetRow } from "./bet-list";
+import { altUnderTip, PropTag, propType, rank, type BetRow } from "./bet-list";
 import { likelyScore } from "@/lib/ours";
 
 const SIZES = [2, 2, 3, 3, 3, 4, 4, 5, 3, 4];
@@ -119,7 +119,7 @@ export function ParlayIdeas({ rows, seed, count = 8, mode = "mixed" }: { rows: B
               <ol className="space-y-1.5 text-sm">
                 {legs.map((l) => (
                   <li key={l.key} className="flex items-start justify-between gap-2">
-                    <span className="min-w-0"><span className="font-semibold">{l.label}</span><span className="block text-[11px] text-muted-foreground">{l.card.matchup.league === "NCAAF" ? "College · " : ""}{l.card.matchup.away.shortName} @ {l.card.matchup.home.shortName} · {l.kind} · {l.book}</span></span>
+                    <span className="min-w-0"><span className="font-semibold">{l.label}</span><span className="block text-[11px] text-muted-foreground"><PropTag type={propType(l)} />{l.card.matchup.league === "NCAAF" ? "College · " : ""}{l.card.matchup.away.shortName} @ {l.card.matchup.home.shortName}{propType(l) ? "" : ` · ${l.kind}`} · {l.book}</span>{propType(l) === "altUnder" && <span className="block text-[11px] text-warn/90">{altUnderTip(l.book)}</span>}</span>
                     <span className="shrink-0 text-right tabular-nums"><b>{fmtAmerican(l.odds)}</b><span className="block text-[11px] text-muted-foreground">{Math.round(l.our * 100)}%</span></span>
                   </li>
                 ))}

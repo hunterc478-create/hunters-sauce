@@ -11,7 +11,7 @@ import { TdDerby } from "@/components/dashboard/td-derby";
 import { GameRow } from "@/components/board/game-row";
 import { GameTile, TEASER_BREAKEVEN, TEASER_LEG_MIN, TeamLogo } from "./game-tile";
 import { LoadPropsButton } from "./load-props";
-import { BetList, lineRows, propRows, rank, usePropResults, ViewTabs, type BetRow, type View } from "./bet-list";
+import { BetList, lineRows, propRows, rank, usePropResults, ViewTabs, type BetRow, type View, PropKey } from "./bet-list";
 import { ModelCheck } from "@/components/dashboard/model-check";
 import { fmtAmerican, fmtUnits } from "@/lib/utils";
 import { ParlayIdeas } from "./parlay-ideas";
@@ -238,6 +238,7 @@ export function PropsView({ bundle }: { bundle: LiveBundle }) {
       {league !== "NFL" && <NflOnly what="Player props" />}
       <Title kicker="Player props" title="Props & alt props" sub="From FanDuel, Fliff, DraftKings and more, plus alt ladders. Ranked by our player projections." />
       <LoadPropsButton />
+      <PropKey />
       {loaded.length > 0 && (
         <Chips value={game} onChange={setGame}
           options={[["all", `All games (${all.length})`], ...loaded.map((c) => [c.matchup.id, `${c.matchup.away.shortName} @ ${c.matchup.home.shortName}`] as [string, string])]} />

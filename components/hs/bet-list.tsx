@@ -155,6 +155,39 @@ function SlipButton({ leg }: { leg: Leg }) {
 
 const pct = (p: number) => `${Math.round(p * 100)}%`;
 
+/** Main line (over and under at most books), alt milestone (usually over only), or alt under (rare; Kalshi "No"). */
+export type PropType = "main" | "alt" | "altUnder";
+export function propType(r: Pick<BetRow, "kind" | "leg">): PropType | undefined {
+  if (r.kind === "Prop") return "main";
+  if (r.kind !== "Alt prop") return undefined;
+  return r.leg.side === "under" || r.leg.side === "no" ? "altUnder" : "alt";
+}
+const TAG: Record<PropType, [string, string]> = {
+  main: ["MAIN LINE", "border-info/50 text-info"],
+  alt: ["ALT", "border-brand/50 text-brand"],
+  altUnder: ["ALT UNDER", "border-warn/60 text-warn"],
+};
+export function PropTag({ type }: { type?: PropType }) {
+  if (!type) return null;
+  const [text, cls] = TAG[type];
+  return <span className={cn("mr-1.5 inline-block rounded border px-1 py-px align-[1px] text-[9px] font-black tracking-wider", cls)}>{text}</span>;
+}
+/** Where you can actually bet an alt under. */
+export const altUnderTip = (book: string) => book === "Kalshi"
+  ? "Most books don't offer alt unders. Bet it on Kalshi (buy No), or use the main line under instead."
+  : `Alt unders are rare: ${book} has this one, most other books won't.`;
+
+/** The three prop labels, explained (top of the Props page). */
+export function PropKey() {
+  return (
+    <div className="mb-4 grid gap-1.5 rounded-lg border border-slate-line bg-slate-card p-3 text-xs text-ink/80 sm:grid-cols-3">
+      <span><PropTag type="main" />The normal prop: Over and Under at most books.</span>
+      <span><PropTag type="alt" />Alt milestone (like 50+ yds): usually Over only.</span>
+      <span><PropTag type="altUnder" />Kalshi &quot;No&quot; side; most books don&apos;t have it.</span>
+    </div>
+  );
+}
+
 export function BetList({ rows, showGame = true, empty = "Nothing here yet.", results = {} }: { rows: BetRow[]; showGame?: boolean; empty?: string; results?: PropResultMap }) {
   if (!rows.length) return <p className="rounded-lg border border-dashed border-slate-line bg-slate-card p-6 text-center text-sm text-muted-foreground">{empty}</p>;
   return (
@@ -172,7 +205,8 @@ export function BetList({ rows, showGame = true, empty = "Nothing here yet.", re
                 {res && <span className={cn("ml-2 rounded px-1.5 py-0.5 text-[11px] font-bold", res === "win" ? "bg-neon/15 text-neon" : res === "loss" ? "bg-loss/15 text-loss" : "bg-slate-raised text-ink/70")}>{res === "win" ? "✓ Hit" : res === "loss" ? "✗ Missed" : "Push"}</span>}
                 {!res && started && <span className="ml-2 rounded bg-slate-raised px-1.5 py-0.5 text-[11px] font-bold text-ink/70">{r.card.matchup.status === "final" ? "Result pending" : "Live"}</span>}
               </div>
-              <div className="text-xs text-muted-foreground">{r.kind}{showGame ? ` · ${gameName(r.card)} · ${kickoff(r.card.matchup.startTime)}` : ""}</div>
+              <div className="text-xs text-muted-foreground"><PropTag type={propType(r)} />{[propType(r) ? "" : r.kind, ...(showGame ? [gameName(r.card), kickoff(r.card.matchup.startTime)] : [])].filter(Boolean).join(" · ")}</div>
+              {propType(r) === "altUnder" && <div className="mt-0.5 text-[11px] text-warn/90">{altUnderTip(r.book)}</div>}
               {r.why && <div className="mt-0.5 text-xs text-ink/60" title={r.why}>{shortWhy(r.why)}</div>}
               <div className="flex flex-wrap gap-1">
                 {!started && (r.bet ? <TrackButton bet={r.bet} card={r.card} /> : <><TrackLegButton leg={r.leg} /><SlipButton leg={r.leg} /></>)}
