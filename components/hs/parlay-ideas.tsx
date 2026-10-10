@@ -42,12 +42,18 @@ const mlPool = (rows: BetRow[]) => rows.filter((r): r is BetRow & { our: number 
 
 type Leg = BetRow & { our: number };
 
-/** Most confident: the 2- and 3-leg combos (different games) with the highest combined chance, from legs that both we
- * (65%+) and the books (60%+) like. Ranked on the average of the two, so a leg the model loves but the books don't
- * (usually a projection miss on a fringe player) doesn't float to the top. No leg appears in more than two parlays. */
+/** Most confident: the 2- and 3-leg combos (different games) with the highest combined chance. Legs: anything both we
+ * (65%+) and the books (60%+) like, plus main-line props we rate 62%+ that the books have at 50%+ (they're priced near
+ * -115, so the books never rate them 60%). Ranked on the average of our chance and the books', so a leg the model loves
+ * but the books don't (usually a projection miss on a fringe player) doesn't float to the top. At least 5 parlays carry
+ * a main-line prop; no leg appears in more than two parlays. */
 const sureness = (l: Leg) => (likelyScore(l) + l.books) / 2;
+const isMain = (l: Leg) => l.kind === "Prop";
 function confident(pool: Leg[], count: number): Leg[][] {
-  const top = pool.filter((r) => r.our >= 0.65 && r.books >= 0.6).sort((a, b) => sureness(b) - sureness(a)).slice(0, 18);
+  const bySure = (a: Leg, b: Leg) => sureness(b) - sureness(a);
+  const strong = pool.filter((r) => r.our >= 0.65 && r.books >= 0.6).sort(bySure).slice(0, 16);
+  const main = pool.filter((r) => isMain(r) && r.our >= 0.62 && r.books >= 0.5 && !strong.includes(r)).sort(bySure).slice(0, 8);
+  const top = [...strong, ...main];
   const combos: Leg[][] = [];
   for (let i = 0; i < top.length; i++) for (let j = i + 1; j < top.length; j++) {
     if (top[i].card.matchup.id === top[j].card.matchup.id) continue;
@@ -58,18 +64,22 @@ function confident(pool: Leg[], count: number): Leg[][] {
     }
   }
   const p = (ls: Leg[]) => ls.reduce((x, l) => x * sureness(l), 1);
-  // Half 2-leg and half 3-leg, so it's not all low-paying doubles.
-  const pick = (n: number, want: number, used: Map<string, number>, out: Leg[][]) => {
-    for (const c of combos.filter((c) => c.length === n).sort((a, b) => p(b) - p(a))) {
+  combos.sort((a, b) => p(b) - p(a));
+  const used = new Map<string, number>(), out: Leg[][] = [];
+  const take = (ok: (c: Leg[]) => boolean, want: number) => {
+    for (const c of combos) {
       if (out.length >= want) break;
-      if (c.some((l) => (used.get(l.key) ?? 0) >= 2)) continue;
+      if (!ok(c) || out.includes(c) || c.some((l) => (used.get(l.key) ?? 0) >= 2)) continue;
       c.forEach((l) => used.set(l.key, (used.get(l.key) ?? 0) + 1));
       out.push(c);
     }
   };
-  const used = new Map<string, number>(), out: Leg[][] = [];
-  pick(2, Math.ceil(count / 2), used, out);
-  pick(3, count, used, out);
+  const mainCount = Math.min(5, count);
+  take((c) => c.some(isMain) && c.length === 2, Math.ceil(mainCount / 2));   // main-line props first, so they always show
+  take((c) => c.some(isMain) && c.length === 3, mainCount);
+  take((c) => c.length === 2, Math.ceil((count + out.length) / 2));            // then the safest of everything, half doubles
+  take((c) => c.length === 3, count);
+  take(() => true, count);
   return out.sort((a, b) => p(b) - p(a));
 }
 
@@ -100,7 +110,7 @@ export function ParlayIdeas({ rows, seed, count = 8, mode = "mixed" }: { rows: B
   return (
     <div>
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">{mode === "ml" ? "Moneylines from different games, each team our model rates 55%+ to win." : mode === "sure" ? "Our safest combos: legs both we (65%+) and the books (60%+) like, ranked by the chance the whole parlay hits." : "Legs from different games, each one our model rates 55%+ to hit."}</p>
+        <p className="text-xs text-muted-foreground">{mode === "ml" ? "Moneylines from different games, each team our model rates 55%+ to win." : mode === "sure" ? "Our safest combos, ranked by the chance the whole parlay hits: legs both we and the books like, plus main-line props you can bet anywhere." : "Legs from different games, each one our model rates 55%+ to hit."}</p>
         {mode !== "sure" && <button type="button" onClick={() => { setShuffles(shuffles + 1); setAdded(null); }} className="inline-flex items-center gap-1.5 rounded-md border border-slate-line px-3 py-1.5 text-xs font-bold hover:bg-slate-raised">
           <Shuffle className="h-3.5 w-3.5" /> Shuffle
         </button>}

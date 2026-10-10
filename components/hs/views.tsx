@@ -354,7 +354,7 @@ export function ParlaysPage({ bundle }: { bundle: LiveBundle }) {
       <Title kicker="Parlays" title="Parlay ideas" sub="A fresh set every update from legs our model likes. Shuffle for more, or tap Add to slip to edit one." />
       <Chips value={mode} onChange={setMode} options={[["mixed", `Mixed · ${lgName(league)}`], ["sure", `Most confident · ${lgName(league)}`], ["ml", "Moneylines only · NFL + College"]]} />
       {mode === "mixed" ? <ParlayIdeas rows={rows} seed={bundle.generatedAt + league} count={10} />
-        : mode === "sure" ? <ParlayIdeas rows={rows} seed={bundle.generatedAt} count={10} mode="sure" />
+        : mode === "sure" ? <ParlayIdeas rows={rows} seed={bundle.generatedAt} count={16} mode="sure" />
         : <ParlayIdeas rows={mlRows} seed={bundle.generatedAt + "ml"} count={10} mode="ml" />}
     </>
   );
