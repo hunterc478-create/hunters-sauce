@@ -392,6 +392,15 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
       const d = p.side === "over" ? v - p.line : p.line - v;
       propResults[p.id] = { r: d > 0 ? "win" : d < 0 ? "loss" : "push", start: c.matchup.startTime };
     }
+    // TD Derby picks (id td:<game>:<Player_Name>) settle from the same official stats
+    for (const side of ["home", "away"] as const) {
+      const team = toNflverseAbbr(c.matchup[side].abbreviation);
+      if (!team) continue;
+      for (const cand of nflPlayers.candidates(team)) {
+        const v = nflPlayers.actual(cand.name, "anytime_td", teams, c.matchup.week);
+        if (v !== null) propResults[`td:${c.matchup.id}:${cand.name}`.replace(/\s+/g, "_")] = { r: v >= 1 ? "win" : "loss", start: c.matchup.startTime };
+      }
+    }
   }
   return { bundle, history, results, propResults };
 }

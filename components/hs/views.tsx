@@ -15,6 +15,7 @@ import { BetList, lineRows, propRows, rank, usePropResults, ViewTabs, type BetRo
 import { ModelCheck } from "@/components/dashboard/model-check";
 import { fmtAmerican, fmtUnits } from "@/lib/utils";
 import { ParlayIdeas } from "./parlay-ideas";
+import { TdList } from "./td-derby-page";
 import { alpha, colorOf } from "@/lib/team-colors";
 import { useLeague, type Lg } from "./league";
 
@@ -101,6 +102,11 @@ export function WeekView({ bundle }: { bundle: LiveBundle }) {
       {rows.length > 0 && (
         <Section title="Most likely to hit" href="/best-bets/" link="Top 25">
           <BetList rows={rank(rows, "likely").slice(0, 5)} />
+        </Section>
+      )}
+      {league === "NFL" && (data.tdDerby?.length ?? 0) > 0 && (
+        <Section title="Top TD chances" href="/td-derby/" link="TD Derby">
+          <TdList list={data.tdDerby!.slice(0, 5)} />
         </Section>
       )}
       {rows.length > 0 && (

@@ -109,7 +109,7 @@ export function ViewTabs({ view, onChange }: { view: View; onChange: (v: View) =
 }
 
 /** Save any selection (props, alt props) to My Bets as a straight bet; tap again to remove. */
-function TrackLegButton({ leg }: { leg: Leg }) {
+export function TrackLegButton({ leg }: { leg: Leg }) {
   const mine = useMyBets();
   const on = mine.has(leg.id);
   return (
@@ -138,7 +138,7 @@ function resultOf(r: BetRow, props: PropResultMap): Result | undefined {
   return gradeLeg(r.leg, { [m.id]: { home: m.score.home, away: m.score.away, homeTeam: m.home.name, awayTeam: m.away.name, start: m.startTime } }, []);
 }
 
-function SlipButton({ leg }: { leg: Leg }) {
+export function SlipButton({ leg }: { leg: Leg }) {
   const slip = useSlip();
   const [err, setErr] = useState<string | null>(null);
   const on = slip.has(leg.id);

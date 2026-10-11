@@ -76,7 +76,7 @@ export function assemble(opts: {
     return {
       // no alt line on a game that already has a board pick: same opinion, bet twice
       altPicks: altPicks(dayCards.filter((c) => open.has(c.matchup.id)), dayProps, 12, new Set(ranked.map((b) => b.matchupId))),
-      tdDerby: (opts.tdDerby ?? []).filter((t) => filter(t.matchupId) && open.has(t.matchupId)).slice(0, 40),
+      tdDerby: (opts.tdDerby ?? []).filter((t) => filter(t.matchupId) && open.has(t.matchupId)).slice(0, 300),
       generatedAt, isMock, topPicks: ranked.slice(0, 10), matchups: dayCards,
       props: props.filter((p) => filter(p.matchupId)).sort((a, b) => b.edge - a.edge), parlays, trackRecord, legacyRecord, recentResults,
       locks: pickLocks(dayBets, paused), locksRecord, modelCheck: check, straightRecord, oursRecord, oursCheck, oursPicks,

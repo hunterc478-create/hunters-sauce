@@ -29,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="pt-[env(safe-area-inset-top)]"><SiteHeader /></div>
         <main>
           <DayProvider days={bundle.days} todayKey={bundle.todayKey}>
-            <div className="mx-auto max-w-[1200px] px-4 pb-24 pt-4 sm:px-6 lg:pb-12">
+            <div className="mx-auto max-w-[1200px] px-4 pb-24 pt-4 sm:px-6 xl:pb-12">
               <UpdateLine bundle={slim} />
               {children}
             </div>
