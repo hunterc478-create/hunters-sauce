@@ -18,11 +18,11 @@ const config: Config = {
         accent: { DEFAULT: "hsl(var(--accent))", foreground: "hsl(var(--accent-foreground))" },
         destructive: { DEFAULT: "hsl(var(--destructive))", foreground: "hsl(var(--destructive-foreground))" },
         card: { DEFAULT: "hsl(var(--card))", foreground: "hsl(var(--card-foreground))" },
-        // Hunter's Sauce v2: dark charcoal with team colors carrying the color; orange is the brand
+        // Hunter's Sauce v2: dark charcoal with team colors carrying the color; violet is the brand
         // (header, active tabs, buttons); green marks good numbers; losses red. v1 token names kept for shared parts.
         obsidian: "#0E0F12",
         ink: "#F3F4F6",
-        brand: { DEFAULT: "#FF7A1A", dim: "#E5650A", soft: "#3A2414" },
+        brand: { DEFAULT: "#A78BFA", dim: "#8B5CF6", soft: "#241D3A" },
         neon: { DEFAULT: "#34D399", dim: "#10B981" },
         slate: { card: "#17191E", raised: "#1F2228", line: "#2B2F37", hover: "#252931" },
         info: "#7CB4FF",

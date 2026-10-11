@@ -4,12 +4,12 @@
 
 @layer base {
   :root {
-    /* Hunter's Sauce v2: charcoal #0E0F12, cards #17191E, ink #F3F4F6, brand orange #FF7A1A, good green #34D399 */
+    /* Hunter's Sauce v2: charcoal #0E0F12, cards #17191E, ink #F3F4F6, brand violet #A78BFA, good green #34D399 */
     --background: 228 13% 6%;
     --foreground: 220 14% 96%;
     --card: 225 13% 10%;
     --card-foreground: 220 14% 96%;
-    --primary: 25 100% 55%;
+    --primary: 255 92% 76%;
     --primary-foreground: 228 13% 6%;
     --secondary: 222 13% 14%;
     --secondary-foreground: 220 14% 96%;
@@ -21,7 +21,7 @@
     --destructive-foreground: 228 13% 6%;
     --border: 222 12% 19%;
     --input: 222 12% 19%;
-    --ring: 25 100% 55%;
+    --ring: 255 92% 76%;
     --radius: 0.75rem;
     color-scheme: dark;
   }
