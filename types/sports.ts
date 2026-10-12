@@ -510,7 +510,18 @@ export interface MatchupCardData {
   teasers?: TeaserLeg[];
   /** The sportsbooks' main line for this game: home margin (minus the home spread) and total. */
   marketLine?: { margin?: number; total?: number };
+  /** Every factor behind this game's projection, for the "Why?" lists. */
+  why?: WhyPart[];
 }
+
+/**
+ * One reason behind a pick, for the "Why?" list. Direction comes from the effect fields:
+ *   m: points of home margin (+ helps home), t: points of total (+ helps the over)   [game lines]
+ *   f: multiplier on the player's stat (above 1 = more of it)                         [props]
+ *   v: our projected stat (compared with each prop's line)
+ * ctx: shown for context but not part of our number.
+ */
+export interface WhyPart { k: string; text: string; m?: number; t?: number; f?: number; v?: number; ctx?: boolean }
 
 /** One anytime-touchdown candidate for the TD derby. */
 export interface TdCandidate {

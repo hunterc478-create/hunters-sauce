@@ -13,6 +13,7 @@ import { kickoff } from "@/lib/nfl";
 import { kalshiHandicap, LIKELY_MIN, LIKELY_ODDS, LONGSHOT_ODDS, mainBet, ourChance, propLabel, sane } from "@/lib/ours";
 import { cn, fmtAmerican } from "@/lib/utils";
 import { TrackButton } from "@/components/dashboard/track-button";
+import { propWhyFor, WhyButton } from "./why";
 
 export interface BetRow {
   key: string;
@@ -28,6 +29,8 @@ export interface BetRow {
   why?: string;
   bet?: ValueBet;
   leg: Leg;
+  /** Props: where the player's projection reasons live ("<matchupId>|<player>|<stat>"). */
+  whyKey?: string;
 }
 
 export type View = "likely" | "likemore" | "longshots";
@@ -65,7 +68,8 @@ export function propRows(props: PlayerProp[], cards: MatchupCardData[]): BetRow[
       start: c.matchup.startTime, americanOdds: p.bestQuote.americanOdds, modelProb: p.ourProb ?? p.modelProb };
     return { key: p.id, card: c, kind: p.isAlt || p.source === "kalshi" ? "Alt prop" as const : "Prop" as const, label,
       odds: p.bestQuote.americanOdds, book: p.bestQuote.bookmaker.name, books: p.source === "kalshi" ? p.impliedProb : p.modelProb,
-      our: p.ourProb !== undefined ? ourChance(p.ourProb, p.source === "kalshi" ? p.impliedProb : p.modelProb) : undefined, why: p.why, leg };
+      our: p.ourProb !== undefined ? ourChance(p.ourProb, p.source === "kalshi" ? p.impliedProb : p.modelProb) : undefined, why: p.why, leg,
+      whyKey: `${p.matchupId}|${p.playerName}|${p.stat}` };
   });
 }
 
@@ -209,6 +213,9 @@ export function BetList({ rows, showGame = true, empty = "Nothing here yet.", re
               {r.why && <div className="mt-0.5 text-xs text-ink/60" title={r.why}>{shortWhy(r.why)}</div>}
               <div className="flex flex-wrap gap-1">
                 {!started && (r.bet ? <TrackButton bet={r.bet} card={r.card} /> : <><TrackLegButton leg={r.leg} /><SlipButton leg={r.leg} /></>)}
+                {r.whyKey
+                  ? <WhyButton parts={propWhyFor(...(r.whyKey.split("|") as [string, string, string]))} target={{ kind: "prop", side: r.leg.side, line: r.leg.line }} />
+                  : <WhyButton parts={r.card.why} target={{ kind: "line", market: r.leg.market, side: r.leg.side, line: r.leg.line }} />}
               </div>
             </div>
             <div className="shrink-0 text-right">

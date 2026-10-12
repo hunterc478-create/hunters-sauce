@@ -10,6 +10,8 @@ import type { Leg } from "@/lib/my-bets";
 import { kickoff, slotOf } from "@/lib/nfl";
 import { cn } from "@/lib/utils";
 import { SlipButton, TrackLegButton, usePropResults } from "./bet-list";
+import { propWhyFor, setPropWhy, WhyButton } from "./why";
+import type { WhyPart } from "@/types/sports";
 
 const POS = ["RB", "WR", "TE", "QB"] as const;
 const pct = (p: number) => `${Math.round(p * 100)}%`;
@@ -38,7 +40,10 @@ export function TdList({ list, start = 1 }: { list: TdCandidate[]; start?: numbe
               </div>
               <div className="text-xs text-muted-foreground">{t.pos} · {t.team} vs {t.opponent} · {kickoff(t.start)}</div>
               <div className="mt-0.5 text-xs text-ink/60" title={t.note}>{short(t.note)}</div>
-              {new Date(t.start) > new Date() && <div className="flex flex-wrap gap-1"><TrackLegButton leg={tdLeg(t)} /><SlipButton leg={tdLeg(t)} /></div>}
+              <div className="flex flex-wrap gap-1">
+                {new Date(t.start) > new Date() && <><TrackLegButton leg={tdLeg(t)} /><SlipButton leg={tdLeg(t)} /></>}
+                <WhyButton parts={propWhyFor(t.matchupId, t.player, "anytime_td")} target={{ kind: "prop", side: "over", line: 0.5 }} />
+              </div>
             </div>
             <div className="shrink-0 text-right">
               <div className="text-xl font-black tabular-nums text-ink">{pct(t.prob)}</div>
@@ -64,7 +69,8 @@ function Chips<T extends string>({ value, onChange, options }: { value: T; onCha
   );
 }
 
-export function TdDerbyPage({ list, cards }: { list: TdCandidate[]; cards: MatchupCardData[] }) {
+export function TdDerbyPage({ list, cards, propWhy }: { list: TdCandidate[]; cards: MatchupCardData[]; propWhy?: Record<string, WhyPart[]> }) {
+  setPropWhy(propWhy);
   const [slot, setSlot] = useState("all");
   const [pos, setPos] = useState("all");
   const [game, setGame] = useState("all");

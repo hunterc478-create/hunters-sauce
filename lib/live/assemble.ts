@@ -25,6 +25,8 @@ export interface LiveBundle {
   status: { sources: SourceStatus[]; notes: string[] };
   /** When player props were last pulled (they refresh once a day and are carried between updates). */
   propsLoadedAt?: string;
+  /** Reasons behind each player projection, by "<matchupId>|<player>|<stat>" (shared by all of that player's lines). */
+  propWhy?: Record<string, import("@/types/sports").WhyPart[]>;
 }
 
 export function assemble(opts: {

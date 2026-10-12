@@ -5,7 +5,16 @@
  */
 import { execFile } from "node:child_process";
 import zlib from "node:zlib";
-import type { PlayerProjection } from "@/types/sports";
+import type { PlayerProjection, WhyPart } from "@/types/sports";
+
+export const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+
+/** A team's pass/rush offense and defense this season, per game and ranked 1-32 (1 = best: most gained, fewest allowed). */
+export interface TeamUnits {
+  games: number;
+  passFor: number; rushFor: number; passAllowed: number; rushAllowed: number;
+  rank: { passFor: number; rushFor: number; passAllowed: number; rushAllowed: number };
+}
 
 export type NflStat = "passing_yards" | "rushing_yards" | "receiving_yards" | "receptions" | "anytime_td" | "passing_tds";
 type Row = { name: string; pos: string; team: string; opp: string; week: number; season: number; v: Record<string, number> };
@@ -172,6 +181,47 @@ export class NflPlayers {
     return rows.sort((a, b) => b.week - a.week)[0]?.team;
   }
 
+  private unitsCache: Map<string, TeamUnits> | null = null;
+  /** Every team's yards gained and allowed through the air and on the ground this season, with ranks. */
+  teamUnits(): Map<string, TeamUnits> {
+    if (this.unitsCache) return this.unitsCache;
+    type Acc = { weeks: Set<number>; passFor: number; rushFor: number; dWeeks: Set<number>; passAllowed: number; rushAllowed: number };
+    const acc = new Map<string, Acc>();
+    const get = (t: string): Acc => {
+      let x = acc.get(t);
+      if (!x) { x = { weeks: new Set(), passFor: 0, rushFor: 0, dWeeks: new Set(), passAllowed: 0, rushAllowed: 0 }; acc.set(t, x); }
+      return x;
+    };
+    for (const r of this.cur) {
+      const o = get(r.team); o.weeks.add(r.week); o.passFor += r.v.passing_yards; o.rushFor += r.v.rushing_yards;
+      const d = get(r.opp); d.dWeeks.add(r.week); d.passAllowed += r.v.passing_yards; d.rushAllowed += r.v.rushing_yards;
+    }
+    const per = [...acc.entries()].filter(([, x]) => x.weeks.size && x.dWeeks.size).map(([t, x]) => ({ t, games: x.weeks.size,
+      passFor: x.passFor / x.weeks.size, rushFor: x.rushFor / x.weeks.size, passAllowed: x.passAllowed / x.dWeeks.size, rushAllowed: x.rushAllowed / x.dWeeks.size }));
+    type K = "passFor" | "rushFor" | "passAllowed" | "rushAllowed";
+    const rankOf = (k: K, desc: boolean) => {
+      const order = [...per].sort((a, b) => (desc ? b[k] - a[k] : a[k] - b[k])).map((x) => x.t);
+      return (t: string) => order.indexOf(t) + 1;
+    };
+    const rk = { passFor: rankOf("passFor", true), rushFor: rankOf("rushFor", true), passAllowed: rankOf("passAllowed", false), rushAllowed: rankOf("rushAllowed", false) };
+    this.unitsCache = new Map(per.map((x) => [x.t, { games: x.games, passFor: x.passFor, rushFor: x.rushFor, passAllowed: x.passAllowed, rushAllowed: x.rushAllowed,
+      rank: { passFor: rk.passFor(x.t), rushFor: rk.rushFor(x.t), passAllowed: rk.passAllowed(x.t), rushAllowed: rk.rushAllowed(x.t) } }]));
+    return this.unitsCache;
+  }
+
+  /** What a defense allows to a position for one stat, per game, and its rank (1 = allows the most). */
+  private allowedTo(opp: string, group: string, stat: NflStat): { perGame: number; rank: number; of: number } | null {
+    const allowed = new Map<string, { sum: number; games: Set<number> }>();
+    for (const r of this.cur) {
+      if (posGroup(r.pos) !== group) continue;
+      const a = allowed.get(r.opp) ?? { sum: 0, games: new Set<number>() };
+      a.sum += statValue(r, stat); a.games.add(r.week); allowed.set(r.opp, a);
+    }
+    const list = [...allowed.entries()].map(([t, a]) => ({ t, pg: a.sum / Math.max(1, a.games.size) })).sort((a, b) => b.pg - a.pg);
+    const i = list.findIndex((x) => x.t === opp);
+    return i < 0 ? null : { perGame: list[i].pg, rank: i + 1, of: list.length };
+  }
+
   private oppFactor(opp: string, group: string, stat: NflStat): { f: number; games: number } {
     const allowed = new Map<string, { sum: number; games: Set<number> }>();
     for (const r of this.cur) {
@@ -192,7 +242,7 @@ export class NflPlayers {
    * Projection for one player and stat against an opponent (nflverse abbreviation).
    * scriptFactor: the team's projected points vs its usual output (applied gently to passing/receiving/TDs).
    */
-  project(player: string, stat: NflStat, opp: string, scriptFactor = 1, scriptCap = 0.06, usage: { factor: number; note: string } | null = null): (PlayerProjection & { note: string; games: number; pos: string }) | null {
+  project(player: string, stat: NflStat, opp: string, scriptFactor = 1, scriptCap = 0.06, usage: { factor: number; note: string } | null = null): (PlayerProjection & { note: string; games: number; pos: string; parts: WhyPart[] }) | null {
     const n = norm(player);
     const mine = this.cur.filter((r) => norm(r.name) === n);
     const last = this.prev.filter((r) => norm(r.name) === n);
@@ -230,14 +280,31 @@ export class NflPlayers {
     const scriptTxt = script === 1 ? "" : `; his team is projected to score ${script > 1 ? "a bit more" : "a bit less"} than usual`;
     const note = `${gp ? `${(curMean * gp).toFixed(0)} ${statWords[stat]} in ${gp} game${gp === 1 ? "" : "s"} this season (${curMean.toFixed(1)} a game${usageTxt})` : "No games this season"}`
       + `${last.length ? `, ${prevMean.toFixed(1)} a game last season` : ""}; ${oppTxt}${scriptTxt}.${usage ? ` ${usage.note}.` : ""}`;
-    if (stat === "receptions" || stat === "anytime_td" || stat === "passing_tds") return { mean, median: mean, distribution: "poisson", note, games: gp, pos };
+    // the same reasons, one per line, each with its effect, for the "Why?" list
+    const counts = stat === "receptions" || stat === "anytime_td" || stat === "passing_tds";
+    const dec = counts ? 2 : 1;
+    const parts: WhyPart[] = [{ k: "Our projection", text: `${mean.toFixed(dec)} ${statWords[stat]}`, v: mean }];
+    const usageTotal = usageTxt ? ` (${usageTxt.trim().replace(/^on /, "")} total)` : "";
+    parts.push({ k: "This season", text: gp ? `${curMean.toFixed(dec)} a game over ${gp} game${gp === 1 ? "" : "s"}${usageTotal}${last.length ? `; ${prevMean.toFixed(dec)} a game last season` : ""}` : `No games yet; ${prevMean.toFixed(dec)} a game last season` });
+    const recent = [...mine].sort((a, b) => b.week - a.week).slice(0, 3);
+    if (recent.length >= 2 && curMean > 0) {
+      const r3 = recent.reduce((s, r) => s + statValue(r, stat), 0) / recent.length;
+      const f3 = r3 / curMean;
+      const trend = f3 > 1.15 ? "trending up" : f3 < 0.85 ? "trending down" : "about his average";
+      parts.push({ k: `Last ${recent.length} games`, text: `${r3.toFixed(dec)} a game (${recent.map((r) => Math.round(statValue(r, stat))).join(", ")}), ${trend}`, f: f3, ctx: true });
+    }
+    const al = this.allowedTo(opp, group, stat);
+    if (al) parts.push({ k: "Defense vs his position", text: `${opp} allows ${al.perGame.toFixed(dec)} ${statWords[stat]} a game to ${who}: ${al.rank <= al.of / 2 ? `${ordinal(al.rank)}-most` : `${ordinal(al.of - al.rank + 1)}-fewest`} of ${al.of}${oppGames ? ` (${oppGames} games)` : ""}`, f: opp_f });
+    if (scriptApplies && script !== 1) parts.push({ k: "Game script", text: `His team is projected to score ${Math.abs(Math.round((scriptFactor - 1) * 100))}% ${scriptFactor > 1 ? "more" : "less"} than usual, so ${scriptFactor > 1 ? "more" : "fewer"} chances`, f: script });
+    if (usage) parts.push({ k: "Teammates out", text: usage.note, f: usage.factor });
+    if (counts) return { mean, median: mean, distribution: "poisson", note, games: gp, pos, parts };
     const q = this.ratios(stat, pos);
     if (q) {
       const median = mean * q[49];
       const spread = mean * (q[83] - q[15]) / 2;   // about one standard deviation, from real games
-      return { mean, median, stdDev: Math.max(spread, 1), quantiles: q, distribution: "empirical", note, games: gp, pos };
+      return { mean, median, stdDev: Math.max(spread, 1), quantiles: q, distribution: "empirical", note, games: gp, pos, parts };
     }
     const sd = stat === "passing_yards" ? Math.max(45, mean * 0.22) : Math.max(15, mean * 0.55);
-    return { mean, median: mean, stdDev: sd, distribution: "normal", note, games: gp, pos };
+    return { mean, median: mean, stdDev: sd, distribution: "normal", note, games: gp, pos, parts };
   }
 }

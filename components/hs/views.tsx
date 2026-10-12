@@ -16,6 +16,7 @@ import { ModelCheck } from "@/components/dashboard/model-check";
 import { fmtAmerican, fmtUnits } from "@/lib/utils";
 import { ParlayIdeas } from "./parlay-ideas";
 import { TdList } from "./td-derby-page";
+import { MatchupBreakdown, setPropWhy } from "./why";
 import { alpha, colorOf } from "@/lib/team-colors";
 import { useLeague, type Lg } from "./league";
 
@@ -75,6 +76,7 @@ function Chips<T extends string>({ value, onChange, options }: { value: T; onCha
 // ---------------- This Week ----------------
 
 export function WeekView({ bundle }: { bundle: LiveBundle }) {
+  setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const { league } = useLeague();
   const games = open(data.matchups, league);
@@ -127,6 +129,7 @@ export function WeekView({ bundle }: { bundle: LiveBundle }) {
 // ---------------- Game page ----------------
 
 export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
+  setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const [view, setView] = useState<View>("likely");
   const propResults = usePropResults();
@@ -168,6 +171,11 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
         </div>
       </header>
 
+      {(card.why?.length ?? 0) > 0 && (
+        <Section title="Matchup breakdown">
+          <MatchupBreakdown card={card} />
+        </Section>
+      )}
       <Section title="Our best bets for this game">
         <ViewTabs view={view} onChange={setView} />
         <BetList rows={shown} showGame={false} results={propResults} empty={view === "longshots" ? "No longshot we like more than the books for this game." : "Nothing our model rates 55%+ at a playable price yet."} />
@@ -210,6 +218,7 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
 // ---------------- Best Bets ----------------
 
 export function BestBetsView({ bundle }: { bundle: LiveBundle }) {
+  setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const { league } = useLeague();
   const rows = allRows(data.matchups, data.props, league);
@@ -231,6 +240,7 @@ export function BestBetsView({ bundle }: { bundle: LiveBundle }) {
 
 
 export function PropsView({ bundle }: { bundle: LiveBundle }) {
+  setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const { league } = useLeague();
   const games = open(data.matchups);
@@ -301,6 +311,7 @@ const fmtSpread = (x: number) => (x === 0 ? "PK" : x > 0 ? `+${x}` : `${x}`);
 const TEASER3_BREAKEVEN = 0.727;
 
 export function TeasersView({ bundle }: { bundle: LiveBundle }) {
+  setPropWhy(bundle.propWhy);
   const { league } = useLeague();
   const games = open(bundle.byDay.all.matchups);
   const legs = games.flatMap((c) => c.teasers ?? []).sort((a, b) => b.prob - a.prob);
@@ -350,6 +361,7 @@ export function TeasersView({ bundle }: { bundle: LiveBundle }) {
 // ---------------- Parlays ----------------
 
 export function ParlaysPage({ bundle }: { bundle: LiveBundle }) {
+  setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const { league } = useLeague();
   const [mode, setMode] = useState<"mixed" | "sure" | "ml">("mixed");
@@ -370,6 +382,7 @@ export function ParlaysPage({ bundle }: { bundle: LiveBundle }) {
 
 /** Our own record: the top "most likely to hit" bets, logged automatically before each kickoff window. */
 export function OurPicksPage({ bundle }: { bundle: LiveBundle }) {
+  setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const rec = data.oursRecord;
   const picks = data.oursPicks ?? [];

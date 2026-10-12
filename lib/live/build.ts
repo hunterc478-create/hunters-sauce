@@ -7,7 +7,7 @@
  *   Situation:       ESPN injuries, rest from the schedule, travel and weather from Open-Meteo
  * Then: engine -> priced picks -> day-by-day bundle, plus the transparency log.
  */
-import type { GameResults, LeagueId, MarketOutcome, MatchupCardData, PickResult, Prediction, TeaserLeg, MatchupFactors, OddsQuote, PlayerProp, TeamRatings, TrackedPick, ValueBet } from "@/types/sports";
+import type { GameResults, LeagueId, MarketOutcome, MatchupCardData, PickResult, Prediction, TeaserLeg, MatchupFactors, OddsQuote, PlayerProp, TeamRatings, TrackedPick, ValueBet, WhyPart } from "@/types/sports";
 import { LEAGUES } from "@/lib/leagues";
 import { paramsFor } from "@/lib/engine/sport-params";
 import { predict } from "@/lib/engine/probability";
@@ -33,6 +33,7 @@ import { NflHistory } from "./nfl-history";
 import { pausedTypes, qualifies } from "./policy";
 import { updateHistory } from "./history";
 import { tdDerby } from "./td-derby";
+import { gameWhy, propContext } from "./why";
 import { impliedProb as implied, normCdf as normCdfLocal, normInv } from "@/lib/odds-math";
 
 /** Hunter's Sauce: NFL and college football. */
@@ -298,7 +299,9 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
     for (const d of res.diag) note(d.name, d.ok, d.detail);
   }
 
-  const derby = tdDerby(cards, nflPlayers, kalshiProps, outByTeam);
+  // reasons behind every player projection, by "<matchupId>|<player>|<stat>" (the TD derby fills in touchdowns)
+  const propWhy: Record<string, WhyPart[]> = {};
+  const derby = tdDerby(cards, nflPlayers, kalshiProps, outByTeam, propWhy);
   if (nflPlayers) note("TD derby", derby.length > 0, `${derby.length} players ranked`);
 
   // ---- 3c) this week's games that have started stay on the site (frozen at their last pregame prices, with the live
@@ -370,12 +373,24 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   for (const p of kalshiProps) if (p.confidence === "high" && ourChanceSane(p.modelProb, p)) { p.ourProb = p.modelProb; p.why = p.matchupNote; }
   // thousands of Kalshi rungs: keep the playable ones (a couple per player and stat) so the data stays phone-sized
   props = [...props, ...trimRungs(kalshiProps)];
+  // the "Why?" lists: every game's factors, and every player projection behind a prop
+  const units = nflPlayers?.teamUnits() ?? null;
+  for (const c of cards) c.why = gameWhy(c, c.matchup.league === "NFL" ? units : null);
+  if (nflPlayers) for (const p of props) {
+    const key = `${p.matchupId}|${p.playerName}|${p.stat}`;
+    if (propWhy[key]) continue;
+    const c = cards.find((x) => x.matchup.id === p.matchupId);
+    const r = c ? projectFor(p.playerName, p.stat, c, nflPlayers, outByTeam) : null;
+    if (r) propWhy[key] = [...r.proj.parts, ...propContext(c!, r.isHome, p.stat)];
+  }
   const prelim = assemble({ tdDerby: derby, cards, bets, props, history: previousHistory, generatedAt: now.toISOString(), isMock: false, tz: DAY_TZ, paused });
   const history = await updateHistory(previousHistory, prelim, cards, reg.games, now, nflPlayers);
   if (fetchLog.length) notes.push(`${fetchLog.length} requests failed this run (status: ${[...new Set(fetchLog.map((f) => String(f.status)))].slice(0, 4).join(", ")}). Other sources filled in where they could.`);
   if (!cards.length) notes.push("No priced games this run. The board will show the last good data if there is any.");
 
   const bundle = assemble({ tdDerby: derby, paused, cards, bets, props, history, generatedAt: now.toISOString(), isMock: false, tz: DAY_TZ, status: { sources, notes }, propsLoadedAt });
+  const shownKeys = new Set([...bundle.byDay.all.props.map((p) => `${p.matchupId}|${p.playerName}|${p.stat}`), ...(bundle.byDay.all.tdDerby ?? []).map((t) => `${t.matchupId}|${t.player}|anytime_td`)]);
+  bundle.propWhy = Object.fromEntries(Object.entries(propWhy).filter(([k]) => shownKeys.has(k)));
   // final scores from the last week, so the browser can settle any tracked bet or parlay leg itself
   const results: GameResults = {};
   for (const g of reg.games) if (g.matchup.status === "final" && g.matchup.score)
@@ -492,10 +507,10 @@ const ourChanceSane = (prob: number, p: PlayerProp) => Math.abs(prob - p.implied
 /** Primetime windows get alt prop ladders from the sportsbooks (they cost extra credits). */
 const PRIMETIME = new Set(["thu", "snf", "mnf"]);
 
-/** Our chance for a sportsbook prop: the same player projection the Kalshi rungs use (form, opponent, script, injuries). */
-function ourPropChance(p: PlayerProp, c: MatchupCardData, players: NflPlayers, outByTeam: Map<string, Set<string>>): { prob: number; why: string } | null {
-  if (!["passing_yards", "rushing_yards", "receiving_yards", "receptions", "passing_tds"].includes(p.stat)) return null;
-  const team = players.teamOf(p.playerName);
+/** One player's projection for a stat in this game (form, opponent, script, injured teammates), as the props use it. */
+function projectFor(name: string, statName: string, c: MatchupCardData, players: NflPlayers, outByTeam: Map<string, Set<string>>) {
+  if (!["passing_yards", "rushing_yards", "receiving_yards", "receptions", "passing_tds"].includes(statName)) return null;
+  const team = players.teamOf(name);
   const home = toNflverseAbbr(c.matchup.home.abbreviation), away = toNflverseAbbr(c.matchup.away.abbreviation);
   if (!team || (team !== home && team !== away)) return null;
   const isHome = team === home;
@@ -503,9 +518,15 @@ function ourPropChance(p: PlayerProp, c: MatchupCardData, players: NflPlayers, o
   const usual = 22 + ((isHome ? c.factors.home : c.factors.away).ratings.offense ?? 0);
   const script = usual > 0 ? 1 + 0.25 * (teamPts / usual - 1) : 1;
   const out = outByTeam.get(`${c.matchup.id}:${isHome ? "home" : "away"}`) ?? new Set<string>();
-  if (out.has(normName(p.playerName))) return null;
-  const stat = p.stat as NflStat;
-  const proj = players.project(p.playerName, stat, isHome ? away : home, script, 0.06, players.usageBoost(p.playerName, team, out, stat));
+  if (out.has(normName(name))) return null;
+  const stat = statName as NflStat;
+  const proj = players.project(name, stat, isHome ? away : home, script, 0.06, players.usageBoost(name, team, out, stat));
+  return proj ? { proj, isHome } : null;
+}
+
+/** Our chance for a sportsbook prop: the same player projection the Kalshi rungs use (form, opponent, script, injuries). */
+function ourPropChance(p: PlayerProp, c: MatchupCardData, players: NflPlayers, outByTeam: Map<string, Set<string>>): { prob: number; why: string } | null {
+  const proj = projectFor(p.playerName, p.stat, c, players, outByTeam)?.proj;
   // fewer than 3 games of data (a backup suddenly starting, a rookie) means the projection is a guess: no number
   if (!proj || proj.games < 3) return null;
   const pOver = probOver(proj, p.line);
