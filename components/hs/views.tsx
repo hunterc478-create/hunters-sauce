@@ -375,10 +375,15 @@ export function OurPicksPage({ bundle }: { bundle: LiveBundle }) {
   const picks = data.oursPicks ?? [];
   const { league } = useLeague();
   const decided = rec ? rec.wins + rec.losses : 0;
-  const avgOur = picks.filter((p) => p.result === "win" || p.result === "loss").reduce((s, p, _, a) => s + p.modelProb / a.length, 0);
+  const settled = picks.filter((p) => p.result === "win" || p.result === "loss");
+  const avgOur = settled.reduce((s, p, _, a) => s + p.modelProb / a.length, 0);
+  // the hit rate these prices need to break even (average of each pick's implied chance)
+  const needed = settled.reduce((s, p, _, a) => s + (p.americanOdds < 0 ? -p.americanOdds / (100 - p.americanOdds) : 100 / (p.americanOdds + 100)) / a.length, 0);
+  const hit = decided ? rec!.wins / decided : 0;
   const tiles = [
     { k: "Record", v: rec ? `${rec.wins}-${rec.losses}${rec.pushes ? `-${rec.pushes}` : ""}` : "0-0" },
-    { k: "Hit rate", v: decided ? `${Math.round((rec!.wins / decided) * 100)}%` : "—", sub: decided ? `we predicted ${Math.round(avgOur * 100)}%` : "" },
+    { k: "Hit rate", v: decided ? `${Math.round(hit * 100)}%` : "—", tone: decided ? (hit >= needed ? "text-neon" : "text-loss") : undefined,
+      sub: decided ? `need ${Math.round(needed * 100)}% to profit · we predicted ${Math.round(avgOur * 100)}%` : "" },
     { k: "Units", v: rec ? fmtUnits(rec.unitsProfit) : "+0.00u", tone: rec && rec.unitsProfit < 0 ? "text-loss" : "text-neon" },
     { k: "ROI", v: rec && rec.picks ? `${(rec.roi * 100).toFixed(1)}%` : "—" },
   ];

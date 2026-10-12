@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import type { MatchupCardData, PlayerProp, ValueBet } from "@/types/sports";
 import { gradeLeg, legFromBet, useMyBets, useSlip, type Leg, type PropResultMap, type Result } from "@/lib/my-bets";
 import { kickoff } from "@/lib/nfl";
-import { kalshiHandicap, LIKELY_MIN, LIKELY_ODDS, LONGSHOT_ODDS, mainBet, propLabel, sane } from "@/lib/ours";
+import { kalshiHandicap, LIKELY_MIN, LIKELY_ODDS, LONGSHOT_ODDS, mainBet, ourChance, propLabel, sane } from "@/lib/ours";
 import { cn, fmtAmerican } from "@/lib/utils";
 import { TrackButton } from "@/components/dashboard/track-button";
 
@@ -51,8 +51,7 @@ export function lineRows(c: MatchupCardData): BetRow[] {
   return picks.filter((p): p is [ValueBet, BetRow["kind"]] => !!p[0] && p[0].marketProb !== undefined).map(([b, kind]) => {
     const books = b.marketProb!;
     const raw = modelGame && b.modelOnlyProb !== undefined && sane(b.modelOnlyProb, books) ? b.modelOnlyProb : undefined;
-    // College ratings are noisy (130+ teams, few games): keep 40% of the model's disagreement with the books.
-    const our = raw !== undefined && c.matchup.league === "NCAAF" ? books + 0.4 * (raw - books) : raw;
+    const our = raw !== undefined ? ourChance(raw, books) : undefined;
     return { key: b.id, card: c, kind, label: b.label, odds: b.bestQuote.americanOdds, book: b.bestQuote.bookmaker.name, books, our, why: why || undefined, bet: b, leg: legFromBet(b, c) };
   });
 }
@@ -66,7 +65,7 @@ export function propRows(props: PlayerProp[], cards: MatchupCardData[]): BetRow[
       start: c.matchup.startTime, americanOdds: p.bestQuote.americanOdds, modelProb: p.ourProb ?? p.modelProb };
     return { key: p.id, card: c, kind: p.isAlt || p.source === "kalshi" ? "Alt prop" as const : "Prop" as const, label,
       odds: p.bestQuote.americanOdds, book: p.bestQuote.bookmaker.name, books: p.source === "kalshi" ? p.impliedProb : p.modelProb,
-      our: p.ourProb, why: p.why, leg };
+      our: p.ourProb !== undefined ? ourChance(p.ourProb, p.source === "kalshi" ? p.impliedProb : p.modelProb) : undefined, why: p.why, leg };
   });
 }
 

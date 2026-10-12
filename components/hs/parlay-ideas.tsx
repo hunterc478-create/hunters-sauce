@@ -43,7 +43,7 @@ const mlPool = (rows: BetRow[]) => rows.filter((r): r is BetRow & { our: number 
 type Leg = BetRow & { our: number };
 
 /** Most confident: the 2- and 3-leg combos (different games) with the highest combined chance. Legs: anything both we
- * (65%+) and the books (60%+) like, plus main-line props we rate 62%+ that the books have at 50%+ (they're priced near
+ * (63%+) and the books (58%+) like, plus main-line props we rate 58%+ that the books have at 50%+ (they're priced near
  * -115, so the books never rate them 60%). Ranked on the average of our chance and the books', so a leg the model loves
  * but the books don't (usually a projection miss on a fringe player) doesn't float to the top. At least 5 parlays carry
  * a main-line prop; no leg appears in more than two parlays. */
@@ -51,8 +51,8 @@ const sureness = (l: Leg) => (likelyScore(l) + l.books) / 2;
 const isMain = (l: Leg) => l.kind === "Prop";
 function confident(pool: Leg[], count: number): Leg[][] {
   const bySure = (a: Leg, b: Leg) => sureness(b) - sureness(a);
-  const strong = pool.filter((r) => r.our >= 0.65 && r.books >= 0.6).sort(bySure).slice(0, 16);
-  const main = pool.filter((r) => isMain(r) && r.our >= 0.62 && r.books >= 0.5 && !strong.includes(r)).sort(bySure).slice(0, 8);
+  const strong = pool.filter((r) => r.our >= 0.63 && r.books >= 0.58).sort(bySure).slice(0, 16);
+  const main = pool.filter((r) => isMain(r) && r.our >= 0.58 && r.books >= 0.5 && !strong.includes(r)).sort(bySure).slice(0, 8);
   const top = [...strong, ...main];
   const combos: Leg[][] = [];
   for (let i = 0; i < top.length; i++) for (let j = i + 1; j < top.length; j++) {
