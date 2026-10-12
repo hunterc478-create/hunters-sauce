@@ -11,7 +11,7 @@ import { TdDerby } from "@/components/dashboard/td-derby";
 import { GameRow } from "@/components/board/game-row";
 import { GameTile, TEASER_BREAKEVEN, TEASER_LEG_MIN, TeamLogo } from "./game-tile";
 import { LoadPropsButton } from "./load-props";
-import { BetList, lineRows, propRows, rank, usePropResults, ViewTabs, type BetRow, type View, PropKey } from "./bet-list";
+import { altLineRows, BetList, lineRows, propRows, rank, usePropResults, ViewTabs, type BetRow, type View, PropKey } from "./bet-list";
 import { ModelCheck } from "@/components/dashboard/model-check";
 import { fmtAmerican, fmtUnits } from "@/lib/utils";
 import { ParlayIdeas } from "./parlay-ideas";
@@ -132,12 +132,16 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
   setPropWhy(bundle.propWhy);
   const data = bundle.byDay.all;
   const [view, setView] = useState<View>("likely");
+  const [lines, setLines] = useState<"main" | "alt">("main");
   const propResults = usePropResults();
   const card = data.matchups.find((c) => c.matchup.id === id);
   if (!card) return <><Title title="Game not found" /><Empty text="This game isn't on the board anymore (it may have finished). Head back to This Week." /></>;
   const m = card.matchup;
-  const rows = [...lineRows(card), ...propRows(data.props.filter((p) => p.matchupId === id), [card])];
-  const shown = rank(rows, view);
+  const props = propRows(data.props.filter((p) => p.matchupId === id), [card]);
+  const mainRows = [...lineRows(card), ...props.filter((r) => r.kind === "Prop")];
+  const altRows = [...altLineRows(card), ...props.filter((r) => r.kind === "Alt prop")];
+  const rows = [...mainRows, ...altRows];
+  const shown = rank(lines === "main" ? mainRows : altRows, view);
   const hasProps = rows.some((r) => r.kind === "Prop");
   const td = (data.tdDerby ?? []).filter((t) => t.matchupId === id);
   const lean = card.prediction.modelVersion !== "market" ? card.prediction : null;
@@ -177,6 +181,10 @@ export function GameView({ bundle, id }: { bundle: LiveBundle; id: string }) {
         </Section>
       )}
       <Section title="Our best bets for this game">
+        <Chips value={lines} onChange={setLines} options={[["main", `Main lines (${mainRows.length})`], ["alt", `Alt lines (${altRows.length})`]]} />
+        {lines === "main"
+          ? <p className="-mt-2 mb-3 text-xs text-muted-foreground">Main spread, total and moneyline plus each player&apos;s normal prop line (what PrizePicks uses). <b className="text-neon">PP ✓</b> = our chance clears the ~58% a PrizePicks pick needs. PrizePicks lines can sit a half-point off the books, so check the number.</p>
+          : <p className="-mt-2 mb-3 text-xs text-muted-foreground">Alt spreads and totals, alt props (like 50+ yds) and Kalshi rungs.</p>}
         <ViewTabs view={view} onChange={setView} />
         <BetList rows={shown} showGame={false} results={propResults} empty={view === "longshots" ? "No longshot we like more than the books for this game." : "Nothing our model rates 55%+ at a playable price yet."} />
         {!hasProps && <p className="mt-2 text-sm text-muted-foreground">Props for this game load at 9 AM Central the day before or the day of kickoff.</p>}

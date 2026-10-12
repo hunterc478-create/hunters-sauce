@@ -31,7 +31,12 @@ export interface BetRow {
   leg: Leg;
   /** Props: where the player's projection reasons live ("<matchupId>|<player>|<stat>"). */
   whyKey?: string;
+  /** An alt spread/total rung (not the main line). */
+  alt?: boolean;
 }
+
+/** PrizePicks: a 2-pick Power Play pays 3x, so each pick needs about 58% (the cube root of 1/5 for 3-pick 5x is about 58.5%). */
+export const PP_MIN = 0.58;
 
 export type View = "likely" | "likemore" | "longshots";
 export const VIEWS: [View, string][] = [["likely", "Most likely to hit"], ["likemore", "We like more than the books"], ["longshots", "Longshots worth a look"]];
@@ -57,6 +62,28 @@ export function lineRows(c: MatchupCardData): BetRow[] {
     const our = raw !== undefined ? ourChance(raw, books) : undefined;
     return { key: b.id, card: c, kind, label: b.label, odds: b.bestQuote.americanOdds, book: b.bestQuote.bookmaker.name, books, our, why: why || undefined, bet: b, leg: legFromBet(b, c) };
   });
+}
+
+/** Alt spread and total rungs (Kalshi ladders) for one game, with our chance from the game model. */
+export function altLineRows(c: MatchupCardData): BetRow[] {
+  const out: BetRow[] = [];
+  const m = c.matchup;
+  for (const b of c.altLadders ?? []) {
+    const spread = b.market === "alt_spread";
+    const team = b.side === "home" ? m.home.shortName : m.away.shortName;
+    for (const r of b.altLines ?? []) {
+      const books = r.marketProb ?? r.modelProb;
+      if (books === undefined) continue;
+      const raw = r.modelOnlyProb !== undefined && sane(r.modelOnlyProb, books) ? r.modelOnlyProb : undefined;
+      const label = spread ? `${team} ${r.line > 0 ? "+" : ""}${r.line} (alt)` : `${b.side === "over" ? "Over" : "Under"} ${r.line} (alt)`;
+      const id = `${b.id}:${r.line}`;
+      const leg: Leg = { id, matchupId: m.id, market: b.market, side: b.side, line: r.line, label, game: gameName(c), league: m.league,
+        start: m.startTime, americanOdds: r.americanOdds, modelProb: raw };
+      out.push({ key: id, card: c, kind: spread ? "Spread" : "Total", label, odds: r.americanOdds, book: r.bookmaker, books,
+        our: raw !== undefined ? ourChance(raw, books) : undefined, leg, alt: true });
+    }
+  }
+  return out;
 }
 
 export function propRows(props: PlayerProp[], cards: MatchupCardData[]): BetRow[] {
@@ -209,6 +236,9 @@ export function BetList({ rows, showGame = true, empty = "Nothing here yet.", re
                 {!res && started && <span className="ml-2 rounded bg-slate-raised px-1.5 py-0.5 text-[11px] font-bold text-ink/70">{r.card.matchup.status === "final" ? "Result pending" : "Live"}</span>}
               </div>
               <div className="text-xs text-muted-foreground"><PropTag type={propType(r)} />{[propType(r) ? "" : r.kind, ...(showGame ? [gameName(r.card), kickoff(r.card.matchup.startTime)] : [])].filter(Boolean).join(" · ")}</div>
+              {r.kind === "Prop" && r.our !== undefined && r.our >= PP_MIN && !started && (
+                <div className="mt-0.5 text-[11px] font-semibold text-neon" title="Our chance clears the ~58% a PrizePicks pick needs (2-pick Power Play pays 3x).">PP ✓ clears the PrizePicks bar (58%+)</div>
+              )}
               {propType(r) === "altUnder" && <div className="mt-0.5 text-[11px] text-warn/90">{altUnderTip(r.book)}</div>}
               {r.why && <div className="mt-0.5 text-xs text-ink/60" title={r.why}>{shortWhy(r.why)}</div>}
               <div className="flex flex-wrap gap-1">
