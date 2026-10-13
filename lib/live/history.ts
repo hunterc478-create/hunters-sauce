@@ -23,7 +23,9 @@ export async function updateHistory(prev: TrackedPick[], board: LiveBundle, card
   const history = prev.map((p) => ({ ...p }));
   const byId = new Map(history.map((p) => [p.id, p]));
   const minsTo = (iso: string) => (new Date(iso).getTime() - now.getTime()) / 60_000;
-  const windowMin = Number(process.env.LOG_WINDOW_MIN ?? 120);   // log picks this close to the start
+  // log picks this close to the start: after NFL inactives come out (~90 min before kickoff), so a late scratch
+  // drops out of the picks instead of being logged (runs are every 30 min, so picks land 40-70 min before kickoff)
+  const windowMin = Number(process.env.LOG_WINDOW_MIN ?? 70);
   const inWindow = (iso: string) => { const m = minsTo(iso); return m > 0 && m <= windowMin; };
   const card = new Map(cards.map((c) => [c.matchup.id, c]));
   const add = (p: TrackedPick) => { history.push(p); byId.set(p.id, p); };
@@ -150,8 +152,10 @@ export async function updateHistory(prev: TrackedPick[], board: LiveBundle, card
       }
       const m = findFinal(gr);
       if (!m || !players || !gr.player || !gr.stat) return null;
-      const v = players.actual(gr.player, gr.stat, [toNflverseAbbr(gr.homeAbbr), toNflverseAbbr(gr.awayAbbr)], m.week);
-      if (v === null) return null;
+      const teams = [toNflverseAbbr(gr.homeAbbr), toNflverseAbbr(gr.awayAbbr)];
+      const v = players.actual(gr.player, gr.stat, teams, m.week);
+      // the game's stats are in but he has none: he didn't play, and books void the bet
+      if (v === null) return players.gamePosted(teams, m.week) ? "void" : null;
       const d = gr.side === "over" ? v - (gr.line ?? 0) : (gr.line ?? 0) - v;
       return d > 0 ? "win" : d < 0 ? "loss" : "push";
     }

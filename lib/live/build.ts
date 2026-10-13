@@ -43,7 +43,7 @@ const PROP_WINDOW_H = Number(process.env.PROP_WINDOW_H ?? 36);
 const DAYS_AHEAD = Number(process.env.DAYS_AHEAD ?? 6);
 const DAYS_BACK = 7;   // look back a week so rest days can come from the schedule
 const PROP_GAMES = Number(process.env.PROP_GAMES ?? 16);
-const LOG_WINDOW_MIN = Number(process.env.LOG_WINDOW_MIN ?? 120);
+const LOG_WINDOW_MIN = Number(process.env.LOG_WINDOW_MIN ?? 70);
 const hourSet = (v: string | undefined, d: string) => new Set((v || d).split(",").map((x) => Number(x.trim())).filter((x) => Number.isFinite(x)));
 const PROP_HOURS = hourSet(process.env.PROP_HOURS, "9");     // local hours (DAY_TZ) when props may load: once a day by default
 const LINES_HOURS = hourSet(process.env.LINES_HOURS, "10,16"); // when The Odds API may backfill missing lines
@@ -400,10 +400,12 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   if (nflPlayers) for (const c of cards) {
     if (c.matchup.status !== "final") continue;
     const teams = [toNflverseAbbr(c.matchup.home.abbreviation), toNflverseAbbr(c.matchup.away.abbreviation)];
+    const posted = nflPlayers.gamePosted(teams, c.matchup.week);
     for (const p of props) {
       if (p.matchupId !== c.matchup.id) continue;
       const v = nflPlayers.actual(p.playerName, p.stat, teams, c.matchup.week);
-      if (v === null) continue;
+      // stats are in but he has none: didn't play, so the bet is voided (stake back, shown as a push)
+      if (v === null) { if (posted) propResults[p.id] = { r: "push", start: c.matchup.startTime }; continue; }
       const d = p.side === "over" ? v - p.line : p.line - v;
       propResults[p.id] = { r: d > 0 ? "win" : d < 0 ? "loss" : "push", start: c.matchup.startTime };
     }
@@ -413,7 +415,9 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
       if (!team) continue;
       for (const cand of nflPlayers.candidates(team)) {
         const v = nflPlayers.actual(cand.name, "anytime_td", teams, c.matchup.week);
-        if (v !== null) propResults[`td:${c.matchup.id}:${cand.name}`.replace(/\s+/g, "_")] = { r: v >= 1 ? "win" : "loss", start: c.matchup.startTime };
+        const id = `td:${c.matchup.id}:${cand.name}`.replace(/\s+/g, "_");
+        if (v !== null) propResults[id] = { r: v >= 1 ? "win" : "loss", start: c.matchup.startTime };
+        else if (posted) propResults[id] = { r: "push", start: c.matchup.startTime };
       }
     }
   }

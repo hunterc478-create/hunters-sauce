@@ -109,6 +109,11 @@ export class NflPlayers {
     return rows.length ? statValue(rows[0], key) : null;
   }
 
+  /** Whether this game's player stats are posted yet (any player with both teams and the week). */
+  gamePosted(teams: string[], week?: number): boolean {
+    return this.cur.some((r) => teams.includes(r.team) && teams.includes(r.opp) && (week === undefined || r.week === week));
+  }
+
   /** Players who get the ball for a team this season (3+ touches a game or a TD), for the TD derby. */
   /**
    * Teammate injuries -> redistributed usage. When teammates are out, 85% of their carries go to the other backs and
