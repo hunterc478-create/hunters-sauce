@@ -109,6 +109,16 @@ export class NflPlayers {
     return rows.length ? statValue(rows[0], key) : null;
   }
 
+  /** The player's game log for one stat, most recent first: this season, then last season (for the hit-rate charts). */
+  log(player: string, stat: string, n = 20): { w: number; o: string; v: number; t: string; ls?: 1 }[] {
+    const k = norm(player);
+    const key = (stat === "touchdowns" ? "anytime_td" : stat) as NflStat;
+    if (!["passing_yards", "rushing_yards", "receiving_yards", "receptions", "anytime_td", "passing_tds"].includes(key)) return [];
+    const rows = (list: Row[], ls?: 1) => list.filter((r) => norm(r.name) === k).sort((a, b) => b.week - a.week)
+      .map((r) => ({ w: r.week, o: r.opp, v: Math.round(statValue(r, key) * 10) / 10, t: r.team, ...(ls ? { ls } : {}) }));
+    return [...rows(this.cur), ...rows(this.prev, 1)].slice(0, n);
+  }
+
   /** Whether this game's player stats are posted yet (any player with both teams and the week). */
   gamePosted(teams: string[], week?: number): boolean {
     return this.cur.some((r) => teams.includes(r.team) && teams.includes(r.opp) && (week === undefined || r.week === week));

@@ -11,6 +11,7 @@ import { kickoff, slotOf } from "@/lib/nfl";
 import { cn } from "@/lib/utils";
 import { SlipButton, TrackLegButton, usePropResults } from "./bet-list";
 import { propWhyFor, setPropWhy, WhyButton } from "./why";
+import { HitChartButton, setLogs } from "./hit-chart";
 import type { WhyPart } from "@/types/sports";
 
 const POS = ["RB", "WR", "TE", "QB"] as const;
@@ -23,7 +24,7 @@ export const tdLeg = (t: TdCandidate): Leg => ({
   game: `${t.team} vs ${t.opponent}`, league: "NFL", start: t.start, americanOdds: t.price?.americanOdds ?? t.fairOdds, modelProb: t.prob,
 });
 
-export function TdList({ list, start = 1 }: { list: TdCandidate[]; start?: number }) {
+export function TdList({ list, start = 1, cards = [] }: { list: TdCandidate[]; start?: number; cards?: MatchupCardData[] }) {
   const results = usePropResults();
   if (!list.length) return <p className="rounded-lg border border-dashed border-slate-line bg-slate-card p-6 text-center text-sm text-muted-foreground">No players here yet.</p>;
   return (
@@ -43,6 +44,7 @@ export function TdList({ list, start = 1 }: { list: TdCandidate[]; start?: numbe
               <div className="flex flex-wrap gap-1">
                 {new Date(t.start) > new Date() && <><TrackLegButton leg={tdLeg(t)} /><SlipButton leg={tdLeg(t)} /></>}
                 <WhyButton parts={propWhyFor(t.matchupId, t.player, "anytime_td")} target={{ kind: "prop", side: "over", line: 0.5 }} />
+                {cards.find((c) => c.matchup.id === t.matchupId) && <HitChartButton card={cards.find((c) => c.matchup.id === t.matchupId)!} bet={{ market: "prop", side: "over", line: 0.5 }} whyKey={`${t.matchupId}|${t.player}|anytime_td`} />}
               </div>
             </div>
             <div className="shrink-0 text-right">
@@ -69,8 +71,9 @@ function Chips<T extends string>({ value, onChange, options }: { value: T; onCha
   );
 }
 
-export function TdDerbyPage({ list, cards, propWhy }: { list: TdCandidate[]; cards: MatchupCardData[]; propWhy?: Record<string, WhyPart[]> }) {
+export function TdDerbyPage({ list, cards, propWhy, logs }: { list: TdCandidate[]; cards: MatchupCardData[]; propWhy?: Record<string, WhyPart[]>; logs?: Parameters<typeof setLogs>[0] }) {
   setPropWhy(propWhy);
+  if (logs) setLogs(logs);
   const [slot, setSlot] = useState("all");
   const [pos, setPos] = useState("all");
   const [game, setGame] = useState("all");
@@ -118,7 +121,7 @@ export function TdDerbyPage({ list, cards, propWhy }: { list: TdCandidate[]; car
       <Chips value={slot} onChange={setSlot} options={[["all", "All slots"], ...slots.map(([k, s]) => [k, s.label] as [string, string])]} />
       <Chips value={pos} onChange={setPos} options={[["all", "All positions"], ...POS.map((p) => [p, p] as [string, string])]} />
       <Chips value={game} onChange={setGame} options={[["all", "All games"], ...games.map((c) => [c.matchup.id, `${c.matchup.away.shortName} @ ${c.matchup.home.shortName}`] as [string, string])]} />
-      <TdList list={shown.slice(0, 100)} />
+      <TdList list={shown.slice(0, 100)} cards={cards} />
       {shown.length > 100 && <p className="mt-2 text-xs text-muted-foreground">Showing the top 100 of {shown.length}. Filter by game or slot to see the rest.</p>}
       <p className="mt-3 text-[11px] text-muted-foreground">Our chances top out around 68%: even the best goal-line backs miss about a third of the time. Players ruled out are left off.</p>
     </>

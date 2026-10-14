@@ -34,6 +34,7 @@ import { pausedTypes, qualifies } from "./policy";
 import { updateHistory } from "./history";
 import { tdDerby } from "./td-derby";
 import { gameWhy, propContext } from "./why";
+import { teamLogs } from "./logs";
 import { impliedProb as implied, normCdf as normCdfLocal, normInv } from "@/lib/odds-math";
 
 /** Hunter's Sauce: NFL and college football. */
@@ -391,6 +392,19 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   const bundle = assemble({ tdDerby: derby, paused, cards, bets, props, history, generatedAt: now.toISOString(), isMock: false, tz: DAY_TZ, status: { sources, notes }, propsLoadedAt });
   const shownKeys = new Set([...bundle.byDay.all.props.map((p) => `${p.matchupId}|${p.playerName}|${p.stat}`), ...(bundle.byDay.all.tdDerby ?? []).map((t) => `${t.matchupId}|${t.player}|anytime_td`)]);
   bundle.propWhy = Object.fromEntries(Object.entries(propWhy).filter(([k]) => shownKeys.has(k)));
+  // hit-rate charts: every team's recent games (ESPN schedules, cached) and each prop player's game log
+  bundle.teamLogs = await teamLogs(cards).catch(() => ({}));
+  if (nflPlayers) {
+    const logs: NonNullable<LiveBundle["playerLogs"]> = {};
+    for (const k of shownKeys) {
+      const [, player, stat] = k.split("|");
+      const key = `${player}|${stat}`;
+      if (logs[key]) continue;
+      const l = nflPlayers.log(player, stat);
+      if (l.length) logs[key] = l;
+    }
+    bundle.playerLogs = logs;
+  }
   // final scores from the last week, so the browser can settle any tracked bet or parlay leg itself
   const results: GameResults = {};
   for (const g of reg.games) if (g.matchup.status === "final" && g.matchup.score)
