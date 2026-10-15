@@ -46,6 +46,16 @@ function parse(buf: Buffer, season: number): Row[] {
   return rows;
 }
 
+/** Carries a game this season vs last; when they moved 30%+ (a new workload), the ratio, else null. */
+function carriesPerGame(rows: Row[]) { return rows.reduce((s, r) => s + r.v.carries, 0) / Math.max(1, rows.length); }
+function roleRatio(mine: Row[], last: Row[]): number | null {
+  const now = carriesPerGame(mine), then = carriesPerGame(last);
+  if (now < 2 && then < 2) return null;
+  const ratio = then > 0 ? now / then : 2;
+  if (ratio >= 0.7 && ratio <= 1 / 0.7) return null;
+  return then > 0 ? ratio : 1;
+}
+
 const statValue = (r: Row, s: NflStat) => (s === "anytime_td" ? r.v.rushing_tds + r.v.receiving_tds : r.v[s]);
 const posGroup = (pos: string) => (pos === "QB" ? "QB" : pos === "RB" || pos === "FB" ? "RB" : pos === "WR" || pos === "TE" ? "REC" : "OTHER");
 export const normName = (s: string) => norm(s);
@@ -271,6 +281,13 @@ export class NflPlayers {
       const typical = stat === "passing_tds" ? 1.4 : posGroup(pos) === "RB" ? 0.35 : posGroup(pos) === "REC" ? 0.25 : 0.15;
       const prevW = last.length ? 8 : 0;
       base = (curMean * mine.length + prevMean * prevW + typical * 4) / (mine.length + prevW + 4);
+    } else if (stat === "rushing_yards" && mine.length && last.length && roleRatio(mine, last) !== null) {
+      // role change: carries a game moved 30%+ from last season, so last season describes a different workload.
+      // It counts as 1 game instead of 5, rescaled to this season's carries. Backtested on weeks 3-6 of 2026: average
+      // miss 20.0 -> 19.2 yds (role-changed backs 18.1 -> 16.6). Receiving, receptions, passing and TDs got worse or
+      // didn't change with the same rule, so they keep the plain blend.
+      const ratio = roleRatio(mine, last)!;
+      base = (curMean * mine.length + prevMean * ratio) / (mine.length + 1);
     } else {
       const k = last.length ? PRIOR_GAMES : 0;
       base = (curMean * mine.length + prevMean * k) / Math.max(1, mine.length + k);
@@ -301,6 +318,8 @@ export class NflPlayers {
     const parts: WhyPart[] = [{ k: "Our projection", text: `${mean.toFixed(dec)} ${statWords[stat]}`, v: mean }];
     const usageTotal = usageTxt ? ` (${usageTxt.trim().replace(/^on /, "")} total)` : "";
     parts.push({ k: "This season", text: gp ? `${curMean.toFixed(dec)} a game over ${gp} game${gp === 1 ? "" : "s"}${usageTotal}${last.length ? `; ${prevMean.toFixed(dec)} a game last season` : ""}` : `No games yet; ${prevMean.toFixed(dec)} a game last season` });
+    if (stat === "rushing_yards" && mine.length && last.length && roleRatio(mine, last) !== null)
+      parts.push({ k: "Role change", text: `${carriesPerGame(mine).toFixed(1)} carries a game this season vs ${carriesPerGame(last).toFixed(1)} last season, so last season counts as 1 game (scaled to his current workload) instead of 5` });
     const recent = [...mine].sort((a, b) => b.week - a.week).slice(0, 3);
     if (recent.length >= 2 && curMean > 0) {
       const r3 = recent.reduce((s, r) => s + statValue(r, stat), 0) / recent.length;
