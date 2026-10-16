@@ -386,6 +386,21 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
     const r = c ? projectFor(p.playerName, p.stat, c, nflPlayers, outByTeam) : null;
     if (r) propWhy[key] = [...r.proj.parts, ...propContext(c!, r.isHome, p.stat)];
   }
+  // props whose projection is mostly last season (4+ games this season, and the projection 40%+ away from this
+  // season's average): the Daily 5 skips them (Franklin 1.0 catches a game projected 2.5; Dobbins 46 yds projected 70)
+  if (nflPlayers) {
+    const memo = new Map<string, boolean>();
+    for (const p of props) {
+      if (p.ourProb === undefined) continue;
+      const key = `${p.matchupId}|${p.playerName}|${p.stat}`;
+      if (!memo.has(key)) {
+        const c = cards.find((x) => x.matchup.id === p.matchupId);
+        const r = c ? projectFor(p.playerName, p.stat, c, nflPlayers, outByTeam) : null;
+        memo.set(key, !!r && r.proj.games >= 4 && Math.abs(r.proj.mean - r.proj.cur) / Math.max(0.5, r.proj.cur) > 0.4);
+      }
+      if (memo.get(key)) p.flags = [...(p.flags ?? []), "leans_last_season"];
+    }
+  }
   const prelim = assemble({ tdDerby: derby, cards, bets, props, history: previousHistory, generatedAt: now.toISOString(), isMock: false, tz: DAY_TZ, paused });
   const history = await updateHistory(previousHistory, prelim, cards, reg.games, now, nflPlayers);
   if (fetchLog.length) notes.push(`${fetchLog.length} requests failed this run (status: ${[...new Set(fetchLog.map((f) => String(f.status)))].slice(0, 4).join(", ")}). Other sources filled in where they could.`);

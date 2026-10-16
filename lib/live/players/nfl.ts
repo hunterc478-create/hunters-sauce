@@ -267,7 +267,7 @@ export class NflPlayers {
    * Projection for one player and stat against an opponent (nflverse abbreviation).
    * scriptFactor: the team's projected points vs its usual output (applied gently to passing/receiving/TDs).
    */
-  project(player: string, stat: NflStat, opp: string, scriptFactor = 1, scriptCap = 0.06, usage: { factor: number; note: string } | null = null): (PlayerProjection & { note: string; games: number; pos: string; parts: WhyPart[] }) | null {
+  project(player: string, stat: NflStat, opp: string, scriptFactor = 1, scriptCap = 0.06, usage: { factor: number; note: string } | null = null): (PlayerProjection & { note: string; games: number; pos: string; parts: WhyPart[]; cur: number }) | null {
     const n = norm(player);
     const mine = this.cur.filter((r) => norm(r.name) === n);
     const last = this.prev.filter((r) => norm(r.name) === n);
@@ -331,14 +331,14 @@ export class NflPlayers {
     if (al) parts.push({ k: "Defense vs his position", text: `${opp} allows ${al.perGame.toFixed(dec)} ${statWords[stat]} a game to ${who}: ${al.rank <= al.of / 2 ? `${ordinal(al.rank)}-most` : `${ordinal(al.of - al.rank + 1)}-fewest`} of ${al.of}${oppGames ? ` (${oppGames} games)` : ""}`, f: opp_f });
     if (scriptApplies && script !== 1) parts.push({ k: "Game script", text: `His team is projected to score ${Math.abs(Math.round((scriptFactor - 1) * 100))}% ${scriptFactor > 1 ? "more" : "less"} than usual, so ${scriptFactor > 1 ? "more" : "fewer"} chances`, f: script });
     if (usage) parts.push({ k: "Teammates out", text: usage.note, f: usage.factor });
-    if (counts) return { mean, median: mean, distribution: "poisson", note, games: gp, pos, parts };
+    if (counts) return { mean, median: mean, distribution: "poisson", note, games: gp, pos, parts, cur: curMean };
     const q = this.ratios(stat, pos);
     if (q) {
       const median = mean * q[49];
       const spread = mean * (q[83] - q[15]) / 2;   // about one standard deviation, from real games
-      return { mean, median, stdDev: Math.max(spread, 1), quantiles: q, distribution: "empirical", note, games: gp, pos, parts };
+      return { mean, median, stdDev: Math.max(spread, 1), quantiles: q, distribution: "empirical", note, games: gp, pos, parts, cur: curMean };
     }
     const sd = stat === "passing_yards" ? Math.max(45, mean * 0.22) : Math.max(15, mean * 0.55);
-    return { mean, median: mean, stdDev: sd, distribution: "normal", note, games: gp, pos, parts };
+    return { mean, median: mean, stdDev: sd, distribution: "normal", note, games: gp, pos, parts, cur: curMean };
   }
 }

@@ -72,6 +72,8 @@ export interface Matchup {
   status: EventStatus;
   /** NFL week number (from ESPN). */
   week?: number;
+  /** Preseason game (ESPN season type 1). */
+  preseason?: boolean;
   home: Competitor;
   away: Competitor;
   venue?: Venue;
@@ -346,7 +348,7 @@ export interface PlayerProp {
   /** Opponent context surfaced in the UI ("Opp. allows 4th-most rush yds"). */
   matchupNote?: string;
   /** "large_gap": 12+ points off the market, usually missing information. */
-  flags?: ("large_gap")[];
+  flags?: ("large_gap" | "leans_last_season")[];
   /** Where the price came from when it isn't a sportsbook (e.g. a Kalshi ladder rung). */
   source?: "kalshi" | "sportsbook";
   /** Kalshi market ticker, used to grade from Kalshi's settled result. */
@@ -409,7 +411,7 @@ export interface TrackedPick {
   placedAt: string;
   settledAt?: string;
   league: LeagueId;
-  kind: "single" | "prop" | "alt" | "parlay" | "lock" | "ours" | "ourparlay" | "lockparlay";
+  kind: "single" | "prop" | "alt" | "parlay" | "lock" | "ours" | "ourparlay" | "lockparlay" | "daily5";
   label: string;
   americanOdds: number;
   units: number;
@@ -592,6 +594,9 @@ export interface DashboardData {
   /** Lock parlays (heavy favorites both we and the books like, still beating their price) and their record. */
   lockParlayRecord?: TrackRecordSummary;
   lockParlayPicks?: TrackedPick[];
+  /** Daily 5: the five bets we'd pick each day, and their record. */
+  daily5Record?: TrackRecordSummary;
+  daily5Picks?: TrackedPick[];
   /** trackRecord without parlays and props: game picks and alt lines only. */
   straightRecord?: TrackRecordSummary;
   /** Calibration and closing-line check for the current model's straight bets. */
