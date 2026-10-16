@@ -332,7 +332,10 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   const fresh = new Set<string>();
   // from 9 AM on, every run pulls any game in the window that hasn't been pulled yet (each game once, so no extra
   // credits): scheduled runs drift (10/14 ran at 8:35 and 9:31), so a "9:00-9:29 only" window missed whole days
-  if (process.env.THE_ODDS_API_KEY && (forced || localHour >= Math.min(...PROP_HOURS))) {
+  // once a day: the first run from 9 AM on (runs drift, so not "9:00-9:29 only"), and never again that day; pulling on
+  // every run after 9 burned 291 of Sports Plus's 500 credits by 10/16
+  const pulledToday = !!previousPropsAt && dayKey(new Date(previousPropsAt), DAY_TZ) === today;
+  if (process.env.THE_ODDS_API_KEY && (forced || (localHour >= Math.min(...PROP_HOURS) && !pulledToday))) {
     const windowEnd = now.getTime() + PROP_WINDOW_H * 3600_000;
     // sportsbook props: NFL only (college would burn the free credits fast)
     const soon = cards.filter((c) => c.matchup.league === "NFL" && openIds.has(c.matchup.id) && new Date(c.matchup.startTime).getTime() <= windowEnd && (forced || !pulledIds.has(c.matchup.id)))
