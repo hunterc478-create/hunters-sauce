@@ -1,3 +1,17 @@
+# Hunter's Sauce: NFL Prop Finder
+
+Every NFL player prop with the real line and price (sportsbooks + Kalshi), each player's hit rate over his last 5, 10, 20
+games and the season, a bar chart of every game against the line, opponent logos, injuries, and a live tracker during games.
+**Not a sportsbook: no bets are taken here.** Live at `https://hunterc478-create.github.io/hunters-sauce/`.
+
+- The page is one file: `site/index.html`. Stats, headshots, logos and live scores come straight from ESPN in your browser.
+- Lines come from `data/live.json`, written by the existing updater (`scripts/build-data.ts`) that GitHub Actions runs every 30 minutes.
+- No model picks: you make the call from the numbers.
+
+---
+
+Old notes on the data updater:
+
 # Hunter's Sauce
 
 NFL odds, best prices across the sportsbooks, value bets, player props and teasers.

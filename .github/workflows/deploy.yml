@@ -77,11 +77,13 @@ jobs:
             curl -fsS "$SITE_URL/data/prop-results.json" -o public/data/prop-results.json || true
           fi
 
-      - name: Build site
-        env:
-          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
-          NEXT_TELEMETRY_DISABLED: 1
-        run: npx next build
+      - name: Build site (Prop Finder page + the data it reads)
+        run: |
+          rm -rf out && mkdir -p out/data
+          cp -r site/. out/
+          cp public/*.png public/manifest.webmanifest out/ 2>/dev/null || true
+          cp -r public/data/. out/data/ 2>/dev/null || true
+          ls out out/data
 
       - uses: actions/upload-pages-artifact@v3
         with:

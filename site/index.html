@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a0e15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Hunter's Sauce">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
+<title>Hunter's Sauce · Prop Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0a0e15;--card:#121925;--card2:#18212f;--line:#243044;--txt:#e8edf5;--mut:#8592a6;--grn:#22c55e;--grnbg:rgba(34,197,94,.16);--red:#ef4444;--redbg:rgba(239,68,68,.16);--yel:#eab308;--acc:#f97316}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--txt);font-family:Inter,system-ui,sans-serif;font-size:14px}
+body{padding-bottom:env(safe-area-inset-bottom)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+input{font:inherit;color:inherit}
+img{display:block}
+.top{position:sticky;top:0;z-index:20;background:rgba(10,14,21,.96);backdrop-filter:blur(8px);padding:calc(env(safe-area-inset-top) + 10px) 14px 8px;border-bottom:1px solid var(--line)}
+.brand{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.brand h1{font-size:18px;margin:0;font-weight:800;letter-spacing:-.02em}
+.brand h1 span{color:var(--acc)}
+.upd{font-size:11px;color:var(--mut);display:flex;align-items:center;gap:6px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--grn);box-shadow:0 0 0 3px rgba(34,197,94,.2)}
+.search{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 12px}
+.search input{flex:1;background:none;border:0;outline:0}
+.games{display:flex;gap:8px;overflow-x:auto;padding:10px 14px;scrollbar-width:none}
+.games::-webkit-scrollbar,.chips::-webkit-scrollbar{display:none}
+.g{flex:0 0 auto;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:7px 10px;min-width:118px;text-align:left}
+.g.on{border-color:var(--acc);background:#1d1710}
+.g .r{display:flex;align-items:center;gap:6px;font-weight:600;font-size:13px;line-height:20px}
+.g .r img{width:18px;height:18px}
+.g .r b{margin-left:auto;font-weight:700}
+.g .t{font-size:10.5px;color:var(--mut);margin-top:2px}
+.g .t.live{color:var(--red);font-weight:700}
+.chips{display:flex;gap:6px;overflow-x:auto;padding:0 14px 10px;scrollbar-width:none}
+.chip{flex:0 0 auto;padding:7px 12px;border-radius:999px;background:var(--card);border:1px solid var(--line);font-size:12.5px;font-weight:600;color:var(--mut)}
+.chip.on{background:var(--txt);color:#000;border-color:var(--txt)}
+.bar2{display:flex;justify-content:space-between;align-items:center;padding:0 14px 8px;color:var(--mut);font-size:11.5px}
+.bar2 select{background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:4px 6px;font:inherit}
+.list{padding:0 10px 30px}
+.row{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:14px;padding:10px;margin-bottom:8px;width:100%;text-align:left}
+.hs{position:relative;width:48px;height:48px;flex:0 0 48px;border-radius:50%;background:var(--card2);overflow:hidden}
+.hs img.face{width:100%;height:100%;object-fit:cover;object-position:top}
+.hs img.tl{position:absolute;right:-2px;bottom:-2px;width:20px;height:20px;background:var(--bg);border-radius:50%;padding:2px}
+.hs .ini{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-weight:700;color:var(--mut)}
+.mid{flex:1;min-width:0}
+.nm{font-weight:700;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nm .inj{font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:5px;vertical-align:2px}
+.inj.q{background:rgba(234,179,8,.18);color:var(--yel)}.inj.o{background:var(--redbg);color:var(--red)}
+.sub{font-size:11.5px;color:var(--mut);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prop{font-size:13px;font-weight:600;margin-top:3px}
+.prop .px{color:var(--mut);font-weight:500;font-size:11.5px}
+.hits{display:flex;gap:4px;flex:0 0 auto}
+.hit{width:44px;text-align:center;border-radius:8px;padding:4px 0;background:var(--card2)}
+.hit small{display:block;font-size:9.5px;color:var(--mut);font-weight:600}
+.hit b{font-size:12.5px}
+.hit.g1{background:var(--grnbg)}.hit.g1 b{color:var(--grn)}
+.hit.r1{background:var(--redbg)}.hit.r1 b{color:var(--red)}
+.empty{color:var(--mut);text-align:center;padding:30px 20px;line-height:1.5}
+.sec{color:var(--mut);font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;margin:14px 6px 8px}
+/* detail */
+.sheet{position:fixed;inset:0;z-index:50;background:var(--bg);overflow-y:auto;transform:translateY(100%);transition:transform .22s ease}
+.sheet.open{transform:none}
+.dh{position:relative;padding:calc(env(safe-area-inset-top) + 12px) 16px 14px;overflow:hidden}
+.dh .bgl{position:absolute;right:-30px;top:-10px;width:190px;height:190px;opacity:.13}
+.back{display:flex;align-items:center;gap:4px;color:var(--mut);font-weight:600;margin-bottom:10px;position:relative}
+.who{display:flex;align-items:center;gap:14px;position:relative}
+.who .hs{width:84px;height:84px;flex-basis:84px}
+.who .hs img.tl{width:30px;height:30px}
+.who h2{margin:0;font-size:21px;font-weight:800;letter-spacing:-.02em}
+.who .sub{font-size:12.5px}
+.box{background:var(--card);border:1px solid var(--line);border-radius:14px;margin:0 12px 10px;padding:12px}
+.linectl{display:flex;align-items:center;gap:10px}
+.linectl button{width:38px;height:38px;border-radius:10px;background:var(--card2);font-size:20px;font-weight:700}
+.linectl .lv{flex:1;text-align:center}
+.linectl .lv b{font-size:24px;font-weight:800}
+.linectl .lv div{font-size:11px;color:var(--mut)}
+.prices{display:flex;gap:8px;margin-top:10px}
+.prices div{flex:1;background:var(--card2);border-radius:10px;padding:7px;text-align:center;font-size:12px}
+.prices b{display:block;font-size:15px}
+.hitrow{display:flex;gap:6px;margin:0 12px 10px}
+.hitrow .hit{flex:1;width:auto;padding:7px 0}
+.hitrow .hit b{font-size:15px}
+.hitrow .hit small{font-size:10.5px}
+.hitrow .hit.sel{outline:2px solid var(--txt)}
+.chart{position:relative;height:190px;display:flex;align-items:flex-end;gap:4px;padding:18px 2px 0}
+.chart .ln{position:absolute;left:0;right:0;border-top:2px dashed rgba(255,255,255,.55);z-index:2}
+.chart .ln span{position:absolute;right:0;top:-17px;font-size:10px;background:var(--bg);padding:0 4px;border-radius:4px;color:var(--txt)}
+.col{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;min-width:0}
+.col .v{font-size:10px;font-weight:700;margin-bottom:2px}
+.col .b{width:100%;max-width:30px;border-radius:5px 5px 2px 2px;min-height:3px}
+.col .b.o{background:var(--grn)}.col .b.u{background:var(--red)}
+.opps{display:flex;gap:4px;padding:6px 2px 0}
+.opps div{flex:1;display:flex;flex-direction:column;align-items:center;min-width:0;font-size:9px;color:var(--mut)}
+.opps img{width:18px;height:18px;margin-bottom:1px}
+.stats{display:flex;justify-content:space-around;margin-top:10px;text-align:center}
+.stats b{display:block;font-size:16px}.stats small{color:var(--mut);font-size:10.5px}
+.live{border-color:rgba(239,68,68,.5)}
+.livetag{color:var(--red);font-weight:800;font-size:11px;letter-spacing:.05em}
+.prog{height:8px;background:var(--card2);border-radius:99px;overflow:hidden;margin-top:8px}
+.prog i{display:block;height:100%;background:var(--grn);border-radius:99px;transition:width .4s}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+td,th{padding:7px 4px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--mut);font-size:10.5px;font-weight:600}
+td:first-child,th:first-child{text-align:left}
+td .w{color:var(--grn);font-weight:700}td .l{color:var(--red);font-weight:700}
+.note{font-size:11px;color:var(--mut);padding:4px 16px 30px;line-height:1.5}
+.spin{display:inline-block;width:12px;height:12px;border:2px solid var(--line);border-top-color:var(--txt);border-radius:50%;animation:s 1s linear infinite;vertical-align:-2px}
+@keyframes s{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="brand"><h1>Hunter's <span>Sauce</span></h1><div class="upd"><i class="dot"></i><span id="upd">Loading…</span></div></div>
+  <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8592a6" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="Search a player…" autocomplete="off"></div>
+</div>
+<div class="games" id="games"></div>
+<div class="chips" id="stats"></div>
+<div class="bar2"><span id="count"></span><label>Sort <select id="sort"><option value="l10">L10 hit %</option><option value="l5">L5 hit %</option><option value="szn">Season hit %</option><option value="time">Game time</option><option value="low">Coldest (unders)</option></select></label></div>
+<div class="list" id="list"></div>
+
+<div class="sheet" id="sheet"></div>
+
+<script>
+"use strict";
+const SB = "https://site.api.espn.com/apis/site/v2/sports/football/nfl";
+const GL = "https://site.web.api.espn.com/apis/common/v3/sports/football/nfl/athletes/";
+const logo = (a) => `https://a.espncdn.com/i/teamlogos/nfl/500/${String(a || "").toLowerCase()}.png`;
+const face = (id) => `https://a.espncdn.com/i/headshots/nfl/players/full/${id}.png`;
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const norm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\b(jr|sr|ii|iii|iv|v)\b\.?/g, "").replace(/[^a-z]/g, "");
+const $ = (id) => document.getElementById(id);
+const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+
+/* Stats: how to read each from an ESPN game log / box score row */
+const STATS = {
+  passing_yards:   { label: "Pass Yds",  short: "Pass Yds", f: (r) => r.passingYards, pos: ["QB"], step: 5 },
+  passing_tds:     { label: "Pass TDs",  short: "Pass TD",  f: (r) => r.passingTouchdowns, pos: ["QB"], step: 1 },
+  completions:     { label: "Completions", short: "Comp",   f: (r) => r.completions, pos: ["QB"], step: 1 },
+  rushing_yards:   { label: "Rush Yds",  short: "Rush Yds", f: (r) => r.rushingYards, pos: ["QB", "RB", "WR"], step: 2.5 },
+  receiving_yards: { label: "Rec Yds",   short: "Rec Yds",  f: (r) => r.receivingYards, pos: ["RB", "WR", "TE"], step: 2.5 },
+  receptions:      { label: "Receptions", short: "Rec",     f: (r) => r.receptions, pos: ["RB", "WR", "TE"], step: 1 },
+  rush_rec_yds:    { label: "Rush+Rec Yds", short: "R+R Yds", f: (r) => (r.rushingYards == null && r.receivingYards == null ? undefined : (r.rushingYards || 0) + (r.receivingYards || 0)), pos: ["RB", "WR", "TE"], step: 2.5 },
+  anytime_td:      { label: "Anytime TD", short: "ATD",     f: (r) => (r.rushingTouchdowns == null && r.receivingTouchdowns == null ? undefined : (r.rushingTouchdowns || 0) + (r.receivingTouchdowns || 0)), pos: ["QB", "RB", "WR", "TE"], step: 1 },
+};
+const DEFAULT_STAT = { QB: "passing_yards", RB: "rushing_yards", WR: "receiving_yards", TE: "receiving_yards" };
+
+const S = { games: [], teams: {}, props: [], players: {}, logs: {}, prev: {}, stat: "all", game: null, q: "", sort: store.get("sort") || "l10", bundleAt: null, detail: null, logReq: new Set(), logCache: {} };
+
+/* ---------- fetch helpers ---------- */
+async function j(url) { const r = await fetch(url, { cache: "no-store" }); if (!r.ok) throw new Error(r.status + " " + url); return r.json(); }
+let active = 0; const queue = [];
+function limited(fn) { return new Promise((res, rej) => { queue.push([fn, res, rej]); pump(); }); }
+function pump() { while (active < 6 && queue.length) { const [fn, res, rej] = queue.shift(); active++; fn().then(res, rej).finally(() => { active--; pump(); }); } }
+
+/* ---------- ESPN: scoreboard ---------- */
+async function loadScoreboard() {
+  const d = await j(SB + "/scoreboard");
+  S.week = d.week?.number;
+  S.games = (d.events || []).map((e) => {
+    const c = e.competitions[0], st = c.status?.type || e.status?.type || {};
+    const side = (h) => { const t = c.competitors.find((x) => x.homeAway === h); return { id: t.team.id, abbr: t.team.abbreviation, name: t.team.shortDisplayName, score: t.score, color: t.team.color }; };
+    const g = { id: e.id, date: e.date, state: st.state, detail: st.shortDetail, home: side("home"), away: side("away") };
+    S.teams[g.home.abbr] = { id: g.home.id, game: g }; S.teams[g.away.abbr] = { id: g.away.id, game: g };
+    return g;
+  }).sort((a, b) => (a.state === "in" ? -1 : 0) - (b.state === "in" ? -1 : 0) || a.date.localeCompare(b.date));
+}
+function gameTime(g) {
+  if (g.state === "in") return g.detail || "LIVE";
+  if (g.state === "post") return "Final";
+  const d = new Date(g.date);
+  return d.toLocaleDateString([], { weekday: "short" }) + " " + d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/* ---------- ESPN: rosters (ids, headshots, injuries, positions) ---------- */
+const rosterP = {};
+function loadRoster(abbr) {
+  if (rosterP[abbr]) return rosterP[abbr];
+  const t = S.teams[abbr]; if (!t) return Promise.resolve([]);
+  return (rosterP[abbr] = j(`${SB}/teams/${t.id}/roster`).then((d) => {
+    const out = [];
+    for (const grp of d.athletes || []) for (const a of grp.items || [grp]) {
+      const pos = a.position?.abbreviation;
+      if (!["QB", "RB", "WR", "TE", "FB"].includes(pos)) continue;
+      const inj = a.injuries?.[0]?.status || (a.status?.type === "injured" ? "Injured Reserve" : "");
+      const p = { id: String(a.id), name: a.displayName, short: a.shortName, pos: pos === "FB" ? "RB" : pos, team: abbr, jersey: a.jersey, head: a.headshot?.href, inj, exp: a.experience?.years };
+      S.players[p.id] = p; out.push(p);
+    }
+    return out;
+  }).catch(() => []));
+}
+
+/* ---------- ESPN: game logs ---------- */
+function parseLog(d) {
+  if (!d || !d.names || !d.events) return [];
+  const rows = [];
+  for (const st of d.seasonTypes || []) {
+    if (/pre/i.test(st.displayName || "")) continue;
+    const post = /post/i.test(st.displayName || "");
+    for (const cat of st.categories || []) {
+      if (cat.type && cat.type !== "event") continue;
+      for (const e of cat.events || []) {
+        const m = d.events[e.eventId]; if (!m) continue;
+        const r = {};
+        d.names.forEach((n, i) => { const v = Number(String(e.stats[i]).replace(/,/g, "")); if (Number.isFinite(v)) r[n] = v; });
+        rows.push({ id: e.eventId, date: m.gameDate || "", opp: m.opponent?.abbreviation || "", at: m.atVs || "", res: m.gameResult || "", score: m.score || "", wk: m.week, post, r });
+      }
+    }
+  }
+  const seen = new Set();
+  return rows.filter((x) => !seen.has(x.id) && seen.add(x.id)).sort((a, b) => b.date.localeCompare(a.date));
+}
+function loadLog(id, season) {
+  const key = id + (season ? ":" + season : "");
+  if (S.logs[key]) return S.logs[key];
+  return (S.logs[key] = limited(() => j(GL + id + "/gamelog" + (season ? "?season=" + season : ""))).then(parseLog).catch(() => []));
+}
+
+/* ---------- Hunter's Sauce data: prop lines (books + Kalshi) ---------- */
+async function loadLines() {
+  try {
+    const b = await j("data/live.json?" + Date.now());
+    S.bundleAt = b.propsLoadedAt || b.generatedAt;
+    const day = b.byDay?.all || {};
+    const mById = {};
+    for (const c of day.matchups || []) mById[c.matchup.id] = c.matchup;
+    const groups = {};
+    for (const p of day.props || []) {
+      const m = mById[p.matchupId];
+      if (!m || (m.league && m.league !== "NFL") || p.isAlt) continue;
+      if (!STATS[p.stat]) continue;
+      const k = norm(p.playerName) + "|" + p.stat + "|" + p.line;
+      const g = (groups[k] ||= { name: p.playerName, team: p.team, pos: p.position, stat: p.stat, line: p.line, start: m.startTime, over: null, under: null });
+      const q = { odds: p.bestQuote?.americanOdds, book: p.source === "kalshi" ? "Kalshi" : p.bestQuote?.bookmaker?.name || "" };
+      if (p.side === "over" || p.side === "yes") { if (!g.over || q.odds > g.over.odds) g.over = q; }
+      else if (!g.under || q.odds > g.under.odds) g.under = q;
+    }
+    // one main line per player+stat: the one with both sides, else the first
+    const best = {};
+    for (const g of Object.values(groups)) {
+      const k = norm(g.name) + "|" + g.stat, cur = best[k];
+      if (!cur || (!!g.over + !!g.under) > (!!cur.over + !!cur.under)) best[k] = g;
+    }
+    S.props = Object.values(best);
+  } catch { S.props = []; }
+}
+
+/* ---------- matching + hit rates ---------- */
+function findPlayer(name, team) {
+  const n = norm(name);
+  const all = Object.values(S.players);
+  return all.find((p) => p.team === team && norm(p.name) === n) || all.find((p) => norm(p.name) === n) ||
+    all.find((p) => p.team === team && n.endsWith(norm(p.name.split(" ").slice(-1)[0])) && n[0] === norm(p.name)[0]);
+}
+function series(log, stat) { return log.map((g) => ({ ...g, v: STATS[stat].f(g.r) })).filter((g) => g.v !== undefined); }
+function rate(vals, line, n) { const s = n ? vals.slice(0, n) : vals; if (!s.length) return null; return { h: s.filter((x) => x.v > line).length, n: s.length }; }
+const pct = (x) => (x ? Math.round((100 * x.h) / x.n) : null);
+const fmtOdds = (o) => (o == null ? "–" : o > 0 ? "+" + o : String(o));
+function hitBox(lbl, x, cls = "") {
+  const p = pct(x);
+  const c = p == null ? "" : p >= 60 ? "g1" : p <= 40 ? "r1" : "";
+  return `<div class="hit ${c} ${cls}"><small>${lbl}</small><b>${p == null ? "–" : p + "%"}</b></div>`;
+}
+function median(a) { if (!a.length) return 0; const s = [...a].sort((x, y) => x - y), m = s.length >> 1; return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; }
+const halfUp = (x) => Math.floor(x) + 0.5;
+
+/* ---------- rows (props with lines, or roster players when no lines) ---------- */
+function rows() {
+  let out = [];
+  if (S.props.length) {
+    for (const p of S.props) {
+      const pl = findPlayer(p.name, p.team);
+      out.push({ ...p, pl, team: pl?.team || p.team, pos: pl?.pos || p.pos });
+    }
+  }
+  // games with no lines: list the team's skill players at their main stat
+  const covered = new Set(out.map((r) => r.team));
+  for (const t of Object.keys(S.teams)) {
+    if (covered.has(t) || !rosterP[t]?.done) continue;
+    for (const pl of rosterP[t].done) {
+      if (/reserve|out/i.test(pl.inj)) continue;
+      const st = DEFAULT_STAT[pl.pos]; if (!st) continue;
+      out.push({ name: pl.name, team: t, pos: pl.pos, stat: st, line: null, pl, noLine: true });
+    }
+  }
+  if (S.game) { const g = S.games.find((x) => x.id === S.game); out = out.filter((r) => r.team === g.home.abbr || r.team === g.away.abbr); }
+  if (S.stat !== "all") out = out.filter((r) => r.stat === S.stat);
+  if (S.q) { const q = norm(S.q); out = out.filter((r) => norm(r.name).includes(q) || norm(r.team) === q); }
+  return out;
+}
+function rowStats(r) {
+  if (!r.pl || !r.logsDone) return null;
+  const v = series(r.logsDone, r.stat);
+  const line = r.line ?? (v.length ? halfUp(median(v.slice(0, 10).map((x) => x.v))) : 0.5);
+  if (r.stat === "anytime_td" && r.line == null) r.lineGuess = 0.5; else if (r.line == null) r.lineGuess = line;
+  return { l5: rate(v, line, 5), l10: rate(v, line, 10), szn: rate(v.filter((x) => x.date.slice(0, 4) >= seasonYear()), line), line };
+}
+function seasonYear() { const d = new Date(); return String(d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear()); }
+
+let renderT;
+function scheduleRender() { clearTimeout(renderT); renderT = setTimeout(render, 120); }
+function render() {
+  // games strip
+  $("games").innerHTML = `<button class="g ${S.game ? "" : "on"}" data-g=""><div class="r" style="height:40px;justify-content:center">All games</div><div class="t">${S.week ? "Week " + S.week : ""}</div></button>` +
+    S.games.map((g) => `<button class="g ${S.game === g.id ? "on" : ""}" data-g="${g.id}">
+      <div class="r"><img src="${logo(g.away.abbr)}" alt="">${esc(g.away.abbr)}${g.state !== "pre" ? `<b>${esc(g.away.score)}</b>` : ""}</div>
+      <div class="r"><img src="${logo(g.home.abbr)}" alt="">${esc(g.home.abbr)}${g.state !== "pre" ? `<b>${esc(g.home.score)}</b>` : ""}</div>
+      <div class="t ${g.state === "in" ? "live" : ""}">${esc(gameTime(g))}</div></button>`).join("");
+  // stat chips
+  const used = new Set((S.props.length ? S.props : []).map((p) => p.stat));
+  const keys = Object.keys(STATS).filter((k) => !S.props.length || used.has(k) || k === S.stat);
+  $("stats").innerHTML = [["all", "All"], ...keys.map((k) => [k, STATS[k].label])].map(([k, l]) => `<button class="chip ${S.stat === k ? "on" : ""}" data-s="${k}">${l}</button>`).join("");
+
+  const list = rows();
+  for (const r of list) {
+    if (r.pl && !S.logReq.has(r.pl.id)) { const id = r.pl.id; S.logReq.add(id); loadLog(id).then((l) => { S.logCache[id] = l; scheduleRender(); }); }
+    if (r.pl && S.logCache[r.pl.id]) r.logsDone = S.logCache[r.pl.id];
+    r.st = rowStats(r);
+  }
+  const key = { l5: (r) => pct(r.st?.l5), l10: (r) => pct(r.st?.l10), szn: (r) => pct(r.st?.szn) }[S.sort];
+  if (S.sort === "time") list.sort((a, b) => String(a.start || S.teams[a.team]?.game?.date).localeCompare(String(b.start || S.teams[b.team]?.game?.date)));
+  else if (S.sort === "low") list.sort((a, b) => (pct(a.st?.l10) ?? 101) - (pct(b.st?.l10) ?? 101));
+  else list.sort((a, b) => (key(b) ?? -1) - (key(a) ?? -1) || (b.line != null) - (a.line != null));
+
+  const lined = list.filter((r) => !r.noLine), bare = list.filter((r) => r.noLine);
+  $("count").textContent = lined.length ? `${lined.length} props with lines` : bare.length ? "No lines posted yet: showing players" : "";
+  const html = (r) => {
+    const g = S.teams[r.team]?.game, opp = g ? (g.home.abbr === r.team ? "vs " + g.away.abbr : "@ " + g.home.abbr) : "";
+    const pl = r.pl, line = r.line ?? r.lineGuess;
+    const inj = pl?.inj ? `<span class="inj ${/out|reserve/i.test(pl.inj) ? "o" : "q"}">${esc(pl.inj.replace("Injured Reserve", "IR"))}</span>` : "";
+    const px = r.over || r.under ? `<span class="px"> · O ${fmtOdds(r.over?.odds)} / U ${fmtOdds(r.under?.odds)}${r.over?.book ? " · " + esc(r.over.book) : ""}</span>` : r.noLine ? `<span class="px"> · no line yet</span>` : "";
+    const lineTxt = r.stat === "anytime_td" ? "Anytime TD" : `${line == null ? "" : "O " + line + " "}${STATS[r.stat].short}`;
+    return `<button class="row" data-p="${esc(pl?.id || "")}" data-st="${r.stat}" data-l="${line ?? ""}" data-n="${esc(r.name)}" data-t="${esc(r.team)}">
+      <div class="hs">${pl ? `<img class="face" src="${face(pl.id)}" onerror="this.remove()" alt="">` : `<div class="ini">${esc(r.name.split(" ").map((x) => x[0]).join("").slice(0, 2))}</div>`}<img class="tl" src="${logo(r.team)}" alt=""></div>
+      <div class="mid"><div class="nm">${esc(r.name)}${inj}</div><div class="sub">${esc(r.pos || "")} · ${esc(r.team)} ${esc(opp)}${g ? " · " + esc(gameTime(g)) : ""}</div><div class="prop">${lineTxt}${px}</div></div>
+      <div class="hits">${r.st ? hitBox("L5", r.st.l5) + hitBox("L10", r.st.l10) + hitBox("SZN", r.st.szn) : pl ? '<span class="spin"></span>' : ""}</div></button>`;
+  };
+  $("list").innerHTML = !list.length ? `<div class="empty">${S.loading ? '<span class="spin"></span> Loading props…' : "Nothing here. Try another game or stat."}</div>` :
+    lined.map(html).join("") + (bare.length ? `<div class="sec">${lined.length ? "No lines yet" : "Players"} · line = their L10 median</div>` + bare.slice(0, 120).map(html).join("") : "");
+  const t = S.bundleAt ? new Date(S.bundleAt) : null;
+  $("upd").textContent = "Scores live" + (t ? " · lines " + t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
+}
+
+/* ---------- player detail ---------- */
+async function openPlayer(id, stat, line, name, team) {
+  let pl = S.players[id];
+  if (!pl) { await loadRoster(team); pl = findPlayer(name, team); }
+  if (!pl) return;
+  const prop = S.props.find((p) => norm(p.name) === norm(pl.name) && p.stat === stat);
+  S.detail = { pl, stat, line: line === "" ? null : Number(line), n: 10, prev: false, live: null };
+  history.pushState({ d: 1 }, "");
+  $("sheet").classList.add("open");
+  drawDetail();
+  const log = await loadLog(pl.id);
+  S.detail.log = log;
+  if (S.detail.line == null) { const v = series(log, stat); S.detail.line = stat === "anytime_td" ? 0.5 : v.length ? halfUp(median(v.slice(0, 10).map((x) => x.v))) : 0.5; }
+  drawDetail();
+  loadLive();
+}
+function propFor(pl, stat) { return S.props.find((p) => norm(p.name) === norm(pl.name) && p.stat === stat); }
+function drawDetail() {
+  const D = S.detail; if (!D) return;
+  const { pl, stat } = D, g = S.teams[pl.team]?.game;
+  const opp = g ? (g.home.abbr === pl.team ? g.away.abbr : g.home.abbr) : null;
+  const statsFor = Object.keys(STATS).filter((k) => STATS[k].pos.includes(pl.pos));
+  const prop = propFor(pl, stat);
+  const all = D.log ? series(D.log, stat) : null;
+  const prevSeries = D.prevLog ? series(D.prevLog, stat) : [];
+  const vals = all ? (D.prev ? [...all, ...prevSeries] : all) : null;
+  const line = D.line ?? 0.5;
+  const shown = vals ? (D.n ? vals.slice(0, D.n) : vals) : [];
+  const max = Math.max(line * 1.25, ...shown.map((x) => x.v), 1);
+  const vsOpp = vals && opp ? [...(all || []), ...prevSeries].filter((x) => x.opp === opp) : [];
+  const nums = shown.map((x) => x.v);
+  const inj = pl.inj ? `<span class="inj ${/out|reserve/i.test(pl.inj) ? "o" : "q"}" style="font-size:11px;padding:2px 6px;border-radius:5px;margin-left:6px">${esc(pl.inj)}</span>` : "";
+  const isTD = stat === "anytime_td";
+  const liveBox = D.live ? (() => {
+    const v = D.live.v ?? 0, need = isTD ? 1 : Math.ceil(line + 0.01), done = v > line;
+    return `<div class="box live"><div style="display:flex;justify-content:space-between;align-items:center"><span class="livetag">● LIVE · ${esc(D.live.clock)}</span><span style="color:var(--mut);font-size:12px">${esc(D.live.score)}</span></div>
+      <div style="display:flex;align-items:baseline;gap:8px;margin-top:6px"><b style="font-size:28px">${v}</b><span style="color:var(--mut)">/ ${isTD ? "1 TD" : "O " + line} ${STATS[stat].short}</span><span style="margin-left:auto;font-weight:700;color:${done ? "var(--grn)" : "var(--mut)"}">${done ? "HIT ✓" : "needs " + Math.max(0, +(need - v).toFixed(1)) + " more"}</span></div>
+      <div class="prog"><i style="width:${Math.min(100, (100 * v) / Math.max(need, 1))}%"></i></div></div>`;
+  })() : "";
+  $("sheet").innerHTML = `
+  <div class="dh"><img class="bgl" src="${logo(pl.team)}" alt="">
+    <button class="back" id="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>Props</button>
+    <div class="who"><div class="hs"><img class="face" src="${face(pl.id)}" onerror="this.remove()" alt=""><img class="tl" src="${logo(pl.team)}" alt=""></div>
+      <div><h2>${esc(pl.name)}</h2><div class="sub">${esc(pl.pos)} · ${esc(pl.team)}${pl.jersey ? " #" + esc(pl.jersey) : ""}${inj}</div>
+      <div class="sub" style="margin-top:3px">${g ? (opp ? (g.home.abbr === pl.team ? "vs " : "@ ") + `<img src="${logo(opp)}" style="width:15px;height:15px;display:inline;vertical-align:-3px"> ${esc(opp)} · ` : "") + esc(gameTime(g)) : "No game this week"}</div></div></div>
+  </div>
+  <div class="chips">${statsFor.map((k) => `<button class="chip ${k === stat ? "on" : ""}" data-ds="${k}">${STATS[k].label}${propFor(pl, k) ? " •" : ""}</button>`).join("")}</div>
+  ${liveBox}
+  <div class="box"><div class="linectl">${isTD ? "" : `<button data-ln="-1">−</button>`}<div class="lv"><b>${isTD ? "1+ TD" : "O/U " + line}</b><div>${prop ? (prop.line === line ? "Book line" : "Book line " + prop.line + " · tap to reset") : "Your line · no book line"}</div></div>${isTD ? "" : `<button data-ln="1">+</button>`}</div>
+    ${prop ? `<div class="prices"><div>Over<b>${fmtOdds(prop.over?.odds)}</b><span style="color:var(--mut);font-size:10.5px">${esc(prop.over?.book || "")}</span></div><div>Under<b>${fmtOdds(prop.under?.odds)}</b><span style="color:var(--mut);font-size:10.5px">${esc(prop.under?.book || "")}</span></div></div>` : ""}</div>
+  ${vals ? `<div class="hitrow">${[[5, "L5"], [10, "L10"], [20, "L20"], [0, D.prev ? "All" : "SZN"]].map(([n, l]) => `<button style="flex:1;display:flex" data-n="${n}">${hitBox(l, rate(vals, line, n || undefined), D.n === n ? "sel" : "").replace('class="hit', 'style="flex:1;width:auto;padding:7px 0" class="hit')}</button>`).join("")}${opp ? hitBox("vs " + opp, rate(vsOpp, line)).replace('class="hit', 'style="flex:1;width:auto;padding:7px 0" class="hit') : ""}</div>` : ""}
+  <div class="box">
+    ${!vals ? '<div class="empty"><span class="spin"></span> Loading game log…</div>' : !shown.length ? '<div class="empty">No games this season yet.</div>' : `
+    <div class="chart"><div class="ln" style="bottom:${(line / max) * 172}px"><span>${line}</span></div>
+      ${[...shown].reverse().map((x) => `<div class="col"><div class="v" style="color:${x.v > line ? "var(--grn)" : "var(--red)"}">${x.v}</div><div class="b ${x.v > line ? "o" : "u"}" style="height:${Math.max(2, (x.v / max) * 172)}px"></div></div>`).join("")}</div>
+    <div class="opps">${[...shown].reverse().map((x) => `<div><img src="${logo(x.opp)}" alt="" onerror="this.style.visibility='hidden'">${x.at === "@" ? "@" : ""}${esc(x.opp)}</div>`).join("")}</div>
+    <div class="stats"><div><b>${(nums.reduce((a, b) => a + b, 0) / nums.length).toFixed(1)}</b><small>Average</small></div><div><b>${median(nums)}</b><small>Median</small></div><div><b>${Math.max(...nums)}</b><small>High</small></div><div><b>${Math.min(...nums)}</b><small>Low</small></div></div>`}
+    <div style="text-align:center;margin-top:10px"><button class="chip ${D.prev ? "on" : ""}" id="prev">${D.prevLoading ? '<span class="spin"></span>' : D.prev ? "Including last season" : "+ Add last season"}</button></div>
+  </div>
+  ${vals && vals.length ? `<div class="box"><table><tr><th>Game</th><th>Result</th><th>${STATS[stat].short}</th><th></th></tr>
+    ${vals.slice(0, D.n || vals.length).map((x) => `<tr><td>${x.wk ? "Wk " + x.wk + " " : ""}${x.at === "@" ? "@" : "vs"} ${esc(x.opp)}${x.date.slice(0, 4) < seasonYear() ? " <span style='color:var(--mut)'>('" + x.date.slice(2, 4) + ")</span>" : ""}</td><td style="color:var(--mut)">${esc(x.res)} ${esc(x.score)}</td><td><b>${x.v}</b></td><td>${x.v > line ? '<span class="w">O</span>' : '<span class="l">U</span>'}</td></tr>`).join("")}</table></div>` : ""}
+  <div class="note">Stats and live scores: ESPN, refreshed while you're on the page. Lines: sportsbooks and Kalshi through Hunter's Sauce's updater. A hit rate is history, not a prediction: check injuries and the price before betting.</div>`;
+}
+async function loadLive() {
+  const D = S.detail; if (!D) return;
+  const g = S.teams[D.pl.team]?.game;
+  if (!g || g.state !== "in") { if (D.live) { D.live = null; drawDetail(); } return; }
+  try {
+    const s = await j(`${SB}/summary?event=${g.id}`);
+    const r = {};
+    for (const t of s.boxscore?.players || []) for (const cat of t.statistics || []) {
+      const a = (cat.athletes || []).find((x) => String(x.athlete?.id) === D.pl.id); if (!a) continue;
+      (cat.keys || []).forEach((k, i) => {
+        const raw = String(a.stats[i] ?? "");
+        if (k.includes("/")) k.split("/").forEach((kk, ii) => (r[kk] = Number(raw.split("/")[ii])));
+        else { const v = Number(raw.replace(/,/g, "")); if (Number.isFinite(v)) r[k] = v; }
+      });
+    }
+    const c = s.header?.competitions?.[0];
+    const score = c ? c.competitors.map((x) => x.team.abbreviation + " " + x.score).join(" – ") : "";
+    D.live = { v: STATS[D.stat].f(r) ?? 0, clock: c?.status?.type?.shortDetail || g.detail, score, r };
+    drawDetail();
+  } catch {}
+}
+function closeDetail() { S.detail = null; $("sheet").classList.remove("open"); }
+
+/* ---------- events ---------- */
+document.addEventListener("click", async (e) => {
+  const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.g !== undefined) { S.game = t.dataset.g || null; render(); }
+  else if (t.dataset.s) { S.stat = t.dataset.s; render(); }
+  else if (t.classList.contains("row")) openPlayer(t.dataset.p, t.dataset.st, t.dataset.l, t.dataset.n, t.dataset.t);
+  else if (t.id === "back") history.back();
+  else if (S.detail) {
+    const D = S.detail;
+    if (t.dataset.ds) { D.stat = t.dataset.ds; const p = propFor(D.pl, D.stat); const v = D.log ? series(D.log, D.stat) : [];
+      D.line = p ? p.line : D.stat === "anytime_td" ? 0.5 : v.length ? halfUp(median(v.slice(0, 10).map((x) => x.v))) : 0.5;
+      if (D.live) D.live.v = STATS[D.stat].f(D.live.r) ?? 0; drawDetail(); }
+    else if (t.dataset.ln) { D.line = Math.max(0.5, +(D.line + Number(t.dataset.ln) * STATS[D.stat].step).toFixed(1)); if (D.line % 1 === 0) D.line += 0.5; drawDetail(); }
+    else if (t.dataset.n !== undefined) { D.n = Number(t.dataset.n); drawDetail(); }
+    else if (t.id === "prev") {
+      if (D.prev) { D.prev = false; drawDetail(); return; }
+      D.prevLoading = true; drawDetail();
+      D.prevLog = await loadLog(D.pl.id, String(Number(seasonYear()) - 1));
+      D.prevLoading = false; D.prev = true; D.n = 0; drawDetail();
+    }
+  }
+});
+$("sheet").addEventListener("click", (e) => { if (e.target.closest(".lv")) { const D = S.detail, p = D && propFor(D.pl, D.stat); if (p) { D.line = p.line; drawDetail(); } } });
+window.addEventListener("popstate", () => { if (S.detail) closeDetail(); });
+$("q").addEventListener("input", (e) => { S.q = e.target.value.trim(); scheduleRender(); });
+$("sort").value = S.sort;
+$("sort").addEventListener("change", (e) => { S.sort = e.target.value; store.set("sort", S.sort); render(); });
+
+/* ---------- boot + live refresh ---------- */
+async function boot() {
+  S.loading = true; render();
+  try { await loadScoreboard(); } catch { $("upd").textContent = "Couldn't reach ESPN"; }
+  render();
+  await loadLines();
+  const teams = Object.keys(S.teams);
+  await Promise.all(teams.map((t) => loadRoster(t).then((r) => { rosterP[t].done = r; })));
+  S.loading = false; render();
+}
+boot();
+setInterval(async () => {
+  if (document.hidden) return;
+  try { await loadScoreboard(); } catch { return; }
+  if (!S.detail) render(); else loadLive();
+}, 45000);
+setInterval(() => { if (!document.hidden) loadLines().then(() => { if (!S.detail) render(); }); }, 10 * 60000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) { loadScoreboard().then(() => (S.detail ? loadLive() : render())).catch(() => {}); } });
+</script>
+</body>
+</html>
