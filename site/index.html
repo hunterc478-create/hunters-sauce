@@ -295,9 +295,13 @@ function rows() {
   if (S.q) { const q = norm(S.q); out = out.filter((r) => norm(r.name).includes(q) || norm(r.team) === q); }
   return out;
 }
+function thisGame(team) { return S.teams[team]?.game; }
 function rowStats(r) {
   if (!r.pl || !r.logsDone) return null;
-  const v = series(r.logsDone, r.stat);
+  const g = thisGame(r.team);
+  const all = series(r.logsDone, r.stat);
+  if (g && g.state === "post") { const x = all.find((e) => e.id === g.id); r.result = x ? x.v : null; }
+  const v = g ? all.filter((e) => e.id !== g.id) : all;
   const line = r.line ?? (v.length ? halfUp(median(v.slice(0, 10).map((x) => x.v))) : 0.5);
   if (r.stat === "anytime_td" && r.line == null) r.lineGuess = 0.5; else if (r.line == null) r.lineGuess = line;
   return { l5: rate(v, line, 5), l10: rate(v, line, 10), szn: rate(v.filter((x) => x.date.slice(0, 4) >= seasonYear()), line), line };
@@ -329,8 +333,9 @@ function render() {
   else if (S.sort === "low") list.sort((a, b) => (pct(a.st?.l10) ?? 101) - (pct(b.st?.l10) ?? 101));
   else list.sort((a, b) => (key(b) ?? -1) - (key(a) ?? -1) || (b.line != null) - (a.line != null));
 
-  const lined = list.filter((r) => !r.noLine), bare = list.filter((r) => r.noLine);
-  $("count").textContent = lined.length ? `${lined.length} props with lines` : bare.length ? "No lines posted yet: showing players" : "";
+  const fin = (r) => thisGame(r.team)?.state === "post";
+  const lined = list.filter((r) => !r.noLine && !fin(r)), done = list.filter((r) => !r.noLine && fin(r)), bare = list.filter((r) => r.noLine && !fin(r));
+  $("count").textContent = lined.length ? `${lined.length} props with lines` : bare.length ? "No lines posted yet: showing players" : done.length ? "Game's over: see how the lines did" : "";
   const html = (r) => {
     const g = S.teams[r.team]?.game, opp = g ? (g.home.abbr === r.team ? "vs " + g.away.abbr : "@ " + g.home.abbr) : "";
     const pl = r.pl, line = r.line ?? r.lineGuess;
@@ -340,10 +345,10 @@ function render() {
     return `<button class="row" data-p="${esc(pl?.id || "")}" data-st="${r.stat}" data-l="${line ?? ""}" data-n="${esc(r.name)}" data-t="${esc(r.team)}">
       <div class="hs">${pl ? `<img class="face" src="${face(pl.id)}" onerror="this.remove()" alt="">` : `<div class="ini">${esc(r.name.split(" ").map((x) => x[0]).join("").slice(0, 2))}</div>`}<img class="tl" src="${logo(r.team)}" alt=""></div>
       <div class="mid"><div class="nm">${esc(r.name)}${inj}</div><div class="sub">${esc(r.pos || "")} · ${esc(r.team)} ${esc(opp)}${g ? " · " + esc(gameTime(g)) : ""}</div><div class="prop">${lineTxt}${px}</div></div>
-      <div class="hits">${r.st ? hitBox("L5", r.st.l5) + hitBox("L10", r.st.l10) + hitBox("SZN", r.st.szn) : pl ? '<span class="spin"></span>' : ""}</div></button>`;
+      <div class="hits">${r.result != null && line != null ? `<div class="hit ${r.result > line ? "g1" : "r1"}" style="width:62px"><small>FINAL</small><b>${r.result} ${r.result > line ? "✓" : "✗"}</b></div>` : ""}${r.st ? (r.result != null ? hitBox("L10", r.st.l10) : hitBox("L5", r.st.l5) + hitBox("L10", r.st.l10) + hitBox("SZN", r.st.szn)) : pl ? '<span class="spin"></span>' : ""}</div></button>`;
   };
   $("list").innerHTML = !list.length ? `<div class="empty">${S.loading ? '<span class="spin"></span> Loading props…' : "Nothing here. Try another game or stat."}</div>` :
-    lined.map(html).join("") + (bare.length ? `<div class="sec">${lined.length ? "No lines yet" : "Players"} · line = their L10 median</div>` + bare.slice(0, 120).map(html).join("") : "");
+    lined.map(html).join("") + (done.length ? `<div class="sec">Final · how the lines did</div>` + done.map(html).join("") : "") + (bare.length ? `<div class="sec">${lined.length ? "No lines yet" : "Players"} · line = their L10 median</div>` + bare.slice(0, 120).map(html).join("") : "");
   const t = S.bundleAt ? new Date(S.bundleAt) : null;
   $("upd").textContent = "Scores live" + (t ? " · lines " + t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 }
@@ -371,7 +376,9 @@ function drawDetail() {
   const opp = g ? (g.home.abbr === pl.team ? g.away.abbr : g.home.abbr) : null;
   const statsFor = Object.keys(STATS).filter((k) => STATS[k].pos.includes(pl.pos));
   const prop = propFor(pl, stat);
-  const all = D.log ? series(D.log, stat) : null;
+  const allRaw = D.log ? series(D.log, stat) : null;
+  const all = allRaw && g ? allRaw.filter((e) => e.id !== g.id) : allRaw;
+  const finalX = allRaw && g && g.state === "post" ? allRaw.find((e) => e.id === g.id) : null;
   const prevSeries = D.prevLog ? series(D.prevLog, stat) : [];
   const vals = all ? (D.prev ? [...all, ...prevSeries] : all) : null;
   const line = D.line ?? 0.5;
@@ -395,7 +402,7 @@ function drawDetail() {
       <div class="sub" style="margin-top:3px">${g ? (opp ? (g.home.abbr === pl.team ? "vs " : "@ ") + `<img src="${logo(opp)}" style="width:15px;height:15px;display:inline;vertical-align:-3px"> ${esc(opp)} · ` : "") + esc(gameTime(g)) : "No game this week"}</div></div></div>
   </div>
   <div class="chips">${statsFor.map((k) => `<button class="chip ${k === stat ? "on" : ""}" data-ds="${k}">${STATS[k].label}${propFor(pl, k) ? " •" : ""}</button>`).join("")}</div>
-  ${liveBox}
+  ${liveBox}${finalX ? `<div class="box" style="display:flex;justify-content:space-between;align-items:center"><span class="livetag" style="color:var(--mut)">FINAL ${opp ? "vs " + esc(opp) : ""}</span><b style="font-size:18px;color:${finalX.v > (D.line ?? 0.5) ? "var(--grn)" : "var(--red)"}">${finalX.v} ${STATS[stat].short} ${finalX.v > (D.line ?? 0.5) ? "✓ over" : "✗ under"}</b></div>` : ""}
   <div class="box"><div class="linectl">${isTD ? "" : `<button data-ln="-1">−</button>`}<div class="lv"><b>${isTD ? "1+ TD" : "O/U " + line}</b><div>${prop ? (prop.line === line ? "Book line" : "Book line " + prop.line + " · tap to reset") : "Your line · no book line"}</div></div>${isTD ? "" : `<button data-ln="1">+</button>`}</div>
     ${prop ? `<div class="prices"><div>Over<b>${fmtOdds(prop.over?.odds)}</b><span style="color:var(--mut);font-size:10.5px">${esc(prop.over?.book || "")}</span></div><div>Under<b>${fmtOdds(prop.under?.odds)}</b><span style="color:var(--mut);font-size:10.5px">${esc(prop.under?.book || "")}</span></div></div>` : ""}</div>
   ${vals ? `<div class="hitrow">${[[5, "L5"], [10, "L10"], [20, "L20"], [0, D.prev ? "All" : "SZN"]].map(([n, l]) => `<button style="flex:1;display:flex" data-n="${n}">${hitBox(l, rate(vals, line, n || undefined), D.n === n ? "sel" : "").replace('class="hit', 'style="flex:1;width:auto;padding:7px 0" class="hit')}</button>`).join("")}${opp ? hitBox("vs " + opp, rate(vsOpp, line)).replace('class="hit', 'style="flex:1;width:auto;padding:7px 0" class="hit') : ""}</div>` : ""}
