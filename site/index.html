@@ -240,11 +240,13 @@ async function loadLines() {
       if (p.side === "over" || p.side === "yes") { if (!g.over || q.odds > g.over.odds) g.over = q; }
       else if (!g.under || q.odds > g.under.odds) g.under = q;
     }
-    // one main line per player+stat: the one with both sides, else the first
+    // one main line per player+stat: a sportsbook line with both sides first, else the price closest to even
+    const imp = (o) => (o == null ? 0.5 : o > 0 ? 100 / (o + 100) : -o / (-o + 100));
+    const score = (g) => (g.over && g.under ? 10 : 0) - Math.abs(imp((g.over || g.under).odds) - 0.5);
     const best = {};
     for (const g of Object.values(groups)) {
       const k = norm(g.name) + "|" + g.stat, cur = best[k];
-      if (!cur || (!!g.over + !!g.under) > (!!cur.over + !!cur.under)) best[k] = g;
+      if (!cur || score(g) > score(cur)) best[k] = g;
     }
     S.props = Object.values(best);
   } catch { S.props = []; }
