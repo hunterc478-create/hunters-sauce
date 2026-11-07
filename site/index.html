@@ -81,6 +81,38 @@ img{display:block}
 .linectl .lv b{font-size:24px;font-weight:800}
 .linectl .lv div{font-size:11px;color:var(--mut)}
 .linectl input{width:92px;background:var(--card2);border:1px solid var(--line);border-radius:10px;color:var(--txt);font-size:22px;font-weight:800;text-align:center;padding:3px 4px;outline:0}
+.views{display:flex;gap:6px;margin-bottom:10px}
+.views button{flex:1;padding:9px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-weight:800;font-size:13.5px;color:var(--mut)}
+.views button.on{background:var(--txt);color:#000;border-color:var(--txt)}
+.tw{padding:10px 10px 30px}
+.mc{display:block;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:8px}
+.mc .tm{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14.5px;margin:3px 0}
+.mc .tm img,.tr img,.vs img{width:26px;height:26px;object-fit:contain}
+.mc .tm .rk{color:var(--mut);font-size:11px;font-weight:700}
+.mc .tm .ln{margin-left:auto;font-size:12.5px;color:var(--mut);font-weight:600}
+.mc .tm .tg{display:flex;gap:4px}
+.tg span{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;background:var(--card2);color:var(--mut)}
+.tg span.pg{background:var(--grnbg);color:var(--grn)}.tg span.pr{background:var(--redbg);color:var(--red)}
+.mc .when{font-size:11px;color:var(--mut);display:flex;justify-content:space-between;margin-bottom:4px}
+.tr{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:6px;width:100%;text-align:left}
+.tr .n{flex:1;font-weight:700;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tr .n small{display:block;color:var(--mut);font-weight:600;font-size:11px}
+.tr .p{font-weight:800;font-size:16px;width:52px;text-align:right}
+.vs{display:flex;align-items:center;justify-content:space-between;padding:4px 4px 10px}
+.vs .side{display:flex;flex-direction:column;align-items:center;gap:4px;width:38%;text-align:center;font-weight:800;font-size:14px}
+.vs .side img{width:54px;height:54px}
+.vs .mid{text-align:center;color:var(--mut);font-size:12px;font-weight:600;line-height:1.5}
+.vs .mid b{color:var(--txt);font-size:14px}
+.cmp{width:100%;border-collapse:collapse}
+.cmp td{padding:8px 4px;border-bottom:1px solid var(--line);font-size:13.5px;font-weight:700;text-align:center;width:33%}
+.cmp td.lb{color:var(--mut);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.cmp td small{display:block;font-size:10.5px;color:var(--mut);font-weight:600}
+.cmp tr.h td{color:var(--acc);font-size:11px;letter-spacing:.06em;text-align:left;padding-top:14px;border-bottom:0}
+.cmp td.cg{color:var(--grn)}.cmp td.cr{color:var(--red)}
+.cmp td:first-child{text-align:center}
+.gl{font-size:12px;width:100%;border-collapse:collapse}
+.gl td{padding:6px 3px;border-bottom:1px solid var(--line);text-align:center}
+.gl td:first-child{text-align:left}
 .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px;margin-left:10px}
 .seg button{padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;color:var(--mut)}
 .seg button.on{background:var(--acc);color:#000}
@@ -121,12 +153,14 @@ td .w{color:var(--grn);font-weight:700}td .l{color:var(--red);font-weight:700}
 <body>
 <div class="top">
   <div class="brand"><div style="display:flex;align-items:center"><h1>Hunter's <span>Sauce</span></h1><div class="seg"><button data-m="nfl">NFL</button><button data-m="cfb">CFB</button></div></div><div class="upd"><i class="dot"></i><span id="upd">Loading…</span></div></div>
+  <div class="views"><button data-v="props">🎯 Props</button><button data-v="teams">📊 Teams</button></div>
   <div class="search"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8592a6" stroke-width="2.5"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="Search a player…" autocomplete="off"></div>
 </div>
-<div class="games" id="games"></div>
+<div id="propsView"><div class="games" id="games"></div>
 <div class="chips" id="stats"></div>
 <div class="bar2"><span id="count"></span><label>Sort <select id="sort"><option value="l10">L10 hit %</option><option value="l5">L5 hit %</option><option value="szn">Season hit %</option><option value="time">Game time</option><option value="low">Coldest (unders)</option></select></label></div>
-<div class="list" id="list"></div>
+<div class="list" id="list"></div></div>
+<div id="teamsView" style="display:none"></div>
 
 <div class="sheet" id="sheet"></div>
 
@@ -488,7 +522,7 @@ $("sheet").addEventListener("change", (e) => {
   S.detail.line = v; drawDetail();
 });
 $("sheet").addEventListener("click", (e) => { if (e.target.id === "lineIn") return; if (e.target.closest(".lv")) { const D = S.detail, p = D && propFor(D.pl, D.stat); if (p) { D.line = p.line; drawDetail(); } } });
-window.addEventListener("popstate", () => { if (S.detail) closeDetail(); });
+window.addEventListener("popstate", () => { if (S.detail) closeDetail(); if (T.open) { T.open = null; $("sheet").classList.remove("open"); } });
 $("q").addEventListener("input", (e) => { S.q = e.target.value.trim(); scheduleRender(); });
 $("sort").value = S.sort;
 $("sort").addEventListener("change", (e) => { S.sort = e.target.value; store.set("sort", S.sort); render(); });
@@ -505,6 +539,141 @@ async function boot() {
   await Promise.all(teams.map((t) => loadRoster(t).then((r) => { rosterP[t].done = r; })));
   S.loading = false; render();
 }
+/* ================= TEAMS TAB ================= */
+const T = { data: null, f: store.get("tf") || "season", sort: store.get("ts") || "ats", open: null };
+async function loadTeams() {
+  if (T.data) return T.data;
+  try { T.data = await j("data/teams.json?" + Date.now()); } catch { T.data = { leagues: {} }; }
+  return T.data;
+}
+const lgData = () => T.data?.leagues?.[L.lid] || { teams: {}, upcoming: [] };
+const recTxt = (r) => r.w + "-" + r.l + (r.p ? "-" + r.p : "");
+const rpct = (r) => (r.w + r.l ? r.w / (r.w + r.l) : null);
+function tally(list, f) { const r = { w: 0, l: 0, p: 0 }; for (const g of list) { const x = f(g); if (x == null) continue; if (x > 0) r.w++; else if (x < 0) r.l++; else r.p++; } return r; }
+function teamStats(t, filt) {
+  let gs = t.games;
+  if (filt === "l5") gs = gs.slice(0, 5);
+  else if (filt === "home") gs = gs.filter((g) => g.home);
+  else if (filt === "away") gs = gs.filter((g) => !g.home);
+  const L_ = (g) => g.line, h1 = gs.filter((g) => g.h1f != null);
+  const avg = (a) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  return {
+    n: gs.length,
+    ml: tally(gs, (g) => g.pf - g.pa),
+    fav: tally(gs.filter((g) => L_(g) < 0), (g) => g.pf - g.pa),
+    dog: tally(gs.filter((g) => L_(g) > 0), (g) => g.pf - g.pa),
+    ats: tally(gs, (g) => (g.line == null ? null : g.pf - g.pa + g.line)),
+    ou: tally(gs, (g) => (g.total == null ? null : g.pf + g.pa - g.total)),
+    tt: tally(gs, (g) => (g.total == null || g.line == null ? null : g.pf - (g.total - g.line) / 2)),
+    ppg: avg(gs.map((g) => g.pf)), opp: avg(gs.map((g) => g.pa)), mar: avg(gs.map((g) => g.pf - g.pa)),
+    h1ml: tally(h1, (g) => g.h1f - g.h1a),
+    h1ats: tally(h1, (g) => (g.line == null ? null : g.h1f - g.h1a + g.line / 2)),
+    h1ou: tally(h1, (g) => (g.total == null ? null : g.h1f + g.h1a - g.total / 2)),
+    h1pf: avg(h1.map((g) => g.h1f)), h1pa: avg(h1.map((g) => g.h1a)),
+    h2pf: avg(h1.map((g) => g.pf - g.h1f)), h2pa: avg(h1.map((g) => g.pa - g.h1a)),
+    games: gs,
+  };
+}
+const SORTS = {
+  ats: ["Cover %", (s) => rpct(s.ats), (s) => recTxt(s.ats) + " ATS"],
+  h1ats: ["1H cover %", (s) => rpct(s.h1ats), (s) => recTxt(s.h1ats) + " 1H ATS"],
+  ml: ["Win %", (s) => rpct(s.ml), (s) => recTxt(s.ml)],
+  h1ml: ["1H lead %", (s) => rpct(s.h1ml), (s) => recTxt(s.h1ml) + " at half"],
+  over: ["Over %", (s) => rpct(s.ou), (s) => recTxt(s.ou) + " O/U"],
+  under: ["Under %", (s) => (rpct(s.ou) == null ? null : 1 - rpct(s.ou)), (s) => s.ou.l + "-" + s.ou.w + (s.ou.p ? "-" + s.ou.p : "") + " U/O"],
+  h1over: ["1H over %", (s) => rpct(s.h1ou), (s) => recTxt(s.h1ou) + " 1H O/U"],
+  tt: ["Team total over %", (s) => rpct(s.tt), (s) => recTxt(s.tt) + " vs team total"],
+  ppg: ["Points per game", (s) => s.ppg, (s) => (s.ppg ?? 0).toFixed(1) + " ppg · allow " + (s.opp ?? 0).toFixed(1)],
+};
+const tlogo = (t) => (t?.logo ? `<img src="${esc(t.logo)}" alt="" onerror="this.style.visibility='hidden'">` : "");
+const tag = (lbl, r) => { const p = rpct(r); return `<span class="${p == null ? "" : p >= 0.6 ? "pg" : p <= 0.4 ? "pr" : ""}">${lbl} ${recTxt(r)}</span>`; };
+function lineTxt(u, side) {
+  if (u.homeLine == null) return "";
+  const l = side === "home" ? u.homeLine : -u.homeLine;
+  return l === 0 ? "PK" : l > 0 ? "+" + l : String(l);
+}
+function renderTeams() {
+  const D = lgData(), TM = D.teams || {};
+  if (!T.data) { $("teamsView").innerHTML = '<div class="empty"><span class="spin"></span> Loading team trends…</div>'; return; }
+  const q = norm(S.q);
+  const chips = (arr, cur, key) => arr.map(([k, l]) => `<button class="chip ${cur === k ? "on" : ""}" data-${key}="${k}">${l}</button>`).join("");
+  let h = `<div class="chips" style="padding:10px 4px">${chips([["season", "Season"], ["l5", "Last 5"], ["home", "Home"], ["away", "Away"]], T.f, "tf")}</div>`;
+  const up = (D.upcoming || []).filter((u) => TM[u.home] && TM[u.away] && (!q || norm(TM[u.home].name + TM[u.away].name + TM[u.home].abbr + TM[u.away].abbr).includes(q)))
+    .sort((a, b) => (CFB ? (Math.min(TM[a.home].rank || 99, TM[a.away].rank || 99) < 99 ? 0 : 1) - (Math.min(TM[b.home].rank || 99, TM[b.away].rank || 99) < 99 ? 0 : 1) : 0) || a.start.localeCompare(b.start));
+  h += `<div class="sec">This week · tap a game to compare</div>`;
+  h += up.length ? up.map((u) => {
+    const row = (side) => {
+      const t = TM[u[side]], st = teamStats(t, T.f);
+      return `<div class="tm">${tlogo(t)}${t.rank ? `<span class="rk">${t.rank}</span>` : ""}${esc(t.short || t.name)}<span class="ln">${side === "home" && u.total ? "O/U " + u.total + " · " : ""}${lineTxt(u, side)}</span></div>
+        <div class="tg" style="margin:0 0 6px 34px">${tag("ML", st.ml)}${tag("ATS", st.ats)}${tag("O/U", st.ou)}${tag("1H", st.h1ats)}</div>`;
+    };
+    const live = u.state === "in", fin = u.state === "post";
+    return `<button class="mc" data-mu="${esc(u.id)}"><div class="when"><span>${live ? `<b style="color:var(--red)">● ${esc(u.detail || "LIVE")}</b>` : fin ? "Final" : esc(new Date(u.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}</span><span>${live || fin ? esc(TM[u.away].abbr + " " + u.as + " – " + TM[u.home].abbr + " " + u.hs) : ""}</span></div>${row("away")}${row("home")}</button>`;
+  }).join("") : `<div class="empty">No games this week${q ? " match that search" : ""}.</div>`;
+  // trends leaderboard
+  const [lbl, key, txt] = SORTS[T.sort];
+  const list = Object.values(TM).filter((t) => t.games.length >= (CFB ? 4 : 3) && (!q || norm(t.name + t.abbr).includes(q)))
+    .map((t) => ({ t, st: teamStats(t, T.f) })).filter((x) => key(x.st) != null).sort((a, b) => key(b.st) - key(a.st));
+  h += `<div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>Trends</span><select id="tsort" style="background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:4px 6px;font:inherit;text-transform:none;letter-spacing:0">${Object.entries(SORTS).map(([k, v]) => `<option value="${k}" ${k === T.sort ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>`;
+  const show = T.all ? list : list.slice(0, 25);
+  h += show.map(({ t, st }, i) => { const v = key(st); const pct = T.sort === "ppg";
+    return `<button class="tr" data-team="${esc(t.id)}"><span style="color:var(--mut);font-weight:700;width:20px">${i + 1}</span>${tlogo(t)}<div class="n">${t.rank ? `<span style="color:var(--mut);font-size:11px">${t.rank} </span>` : ""}${esc(t.name)}<small>${esc(txt(st))}</small></div><div class="p" style="color:${pct ? "var(--txt)" : v >= 0.6 ? "var(--grn)" : v <= 0.4 ? "var(--red)" : "var(--txt)"}">${pct ? v.toFixed(1) : Math.round(v * 100) + "%"}</div></button>`; }).join("");
+  if (list.length > show.length) h += `<button class="chip" id="tall" style="display:block;margin:6px auto">Show all ${list.length} teams</button>`;
+  h += `<div class="note">Lines are the closing spread and total. 1H cover = covering half the game spread; 1H over = over half the game total. Team total = the score the line implied for that team. Scores: ESPN · NFL lines: nflverse · college lines: ESPN.</div>`;
+  $("teamsView").innerHTML = h;
+}
+function drawMatchup(homeId, awayId, u) {
+  const TM = lgData().teams, A = TM[awayId], H = TM[homeId];
+  const a = teamStats(A, T.f), hS = teamStats(H, T.f);
+  const cell = (r, inv) => { const p = rpct(r); const c = p == null ? "" : (inv ? 1 - p : p) >= 0.6 ? "cg" : (inv ? 1 - p : p) <= 0.4 ? "cr" : ""; return `<td class="${c}">${recTxt(r)}<small>${p == null ? "–" : Math.round(p * 100) + "%"}</small></td>`; };
+  const num = (x) => `<td>${x == null ? "–" : x.toFixed(1)}</td>`;
+  const row = (lb, f) => `<tr>${f(a)}<td class="lb">${lb}</td>${f(hS)}</tr>`;
+  const hd = (t) => `<tr class="h"><td colspan="3">${t}</td></tr>`;
+  const glog = (t, st) => `<div class="box"><div style="display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:6px">${tlogo(t)}${esc(t.name)}</div><table class="gl"><tr style="color:var(--mut);font-size:10.5px"><td>Game</td><td>Score</td><td>1H</td><td>Line</td><td>ATS</td><td>O/U</td></tr>${st.games.slice(0, 8).map((g) => {
+    const ats = g.line == null ? null : g.pf - g.pa + g.line, ou = g.total == null ? null : g.pf + g.pa - g.total;
+    const mk = (x, w, l) => (x == null ? "–" : x > 0 ? `<b style="color:var(--grn)">${w}</b>` : x < 0 ? `<b style="color:var(--red)">${l}</b>` : "P");
+    return `<tr><td>${g.home ? "vs" : "@"} ${esc(g.opp)}</td><td><b style="color:${g.pf > g.pa ? "var(--grn)" : g.pf < g.pa ? "var(--red)" : "var(--txt)"}">${g.pf}-${g.pa}</b></td><td>${g.h1f ?? "–"}-${g.h1a ?? "–"}</td><td>${g.line == null ? "–" : g.line > 0 ? "+" + g.line : g.line}</td><td>${mk(ats, "C", "L")}</td><td>${mk(ou, "O", "U")}</td></tr>`; }).join("")}</table></div>`;
+  $("sheet").innerHTML = `<div class="dh"><button class="back" id="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>Teams</button>
+    <div class="vs"><div class="side">${tlogo(A).replace("<img", '<img style="width:54px;height:54px"')}${A.rank ? `<small style="color:var(--mut)">#${A.rank}</small>` : ""}${esc(A.short || A.name)}</div>
+    <div class="mid">${u ? `<b>${esc(A.abbr)} ${lineTxt(u, "away") || "–"}</b><br>O/U <b>${u.total ?? "–"}</b><br>${esc(new Date(u.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}` : "vs"}</div>
+    <div class="side">${tlogo(H).replace("<img", '<img style="width:54px;height:54px"')}${H.rank ? `<small style="color:var(--mut)">#${H.rank}</small>` : ""}${esc(H.short || H.name)}</div></div></div>
+    <div class="chips">${[["season", "Season"], ["l5", "Last 5"], ["home", "Home"], ["away", "Away"]].map(([k, l]) => `<button class="chip ${T.f === k ? "on" : ""}" data-tf2="${k}">${l}</button>`).join("")}</div>
+    <div class="box"><table class="cmp">
+      ${hd("Moneyline")}${row("Record", (s) => cell(s.ml))}${row("As favorite", (s) => cell(s.fav))}${row("As underdog", (s) => cell(s.dog))}
+      ${hd("Spread")}${row("Cover (ATS)", (s) => cell(s.ats))}${row("Avg margin", (s) => num(s.mar))}
+      ${hd("Points & totals")}${row("Over / under", (s) => cell(s.ou))}${row("Team total over", (s) => cell(s.tt))}${row("Points per game", (s) => num(s.ppg))}${row("Points allowed", (s) => num(s.opp))}
+      ${hd("First half")}${row("Led at half", (s) => cell(s.h1ml))}${row("1H cover", (s) => cell(s.h1ats))}${row("1H over", (s) => cell(s.h1ou))}${row("1H points", (s) => num(s.h1pf))}${row("1H allowed", (s) => num(s.h1pa))}
+      ${hd("Second half")}${row("2H points", (s) => num(s.h2pf))}${row("2H allowed", (s) => num(s.h2pa))}
+    </table></div>
+    ${glog(A, a)}${glog(H, hS)}
+    <div class="note">Records are ${T.f === "l5" ? "the last 5 games" : T.f === "home" ? "home games" : T.f === "away" ? "road games" : "this season"} (W-L-push). Green = 60%+, red = 40% or less.</div>`;
+}
+function openMatchup(homeId, awayId, u) { T.open = { homeId, awayId, u }; history.pushState({ d: 1 }, ""); drawMatchup(homeId, awayId, u); $("sheet").classList.add("open"); $("sheet").scrollTop = 0; }
+let VIEW = store.get("view") === "teams" ? "teams" : "props";
+async function setView(v) {
+  VIEW = v; store.set("view", v);
+  document.querySelectorAll("[data-v]").forEach((b) => b.classList.toggle("on", b.dataset.v === v));
+  $("propsView").style.display = v === "props" ? "" : "none";
+  $("teamsView").style.display = v === "teams" ? "" : "none";
+  $("q").placeholder = v === "teams" ? "Search a team…" : "Search a player…";
+  if (v === "teams") { $("teamsView").className = "tw"; renderTeams(); await loadTeams(); renderTeams(); }
+}
+document.addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.v) setView(b.dataset.v);
+  else if (b.dataset.tf) { T.f = b.dataset.tf; store.set("tf", T.f); renderTeams(); }
+  else if (b.dataset.tf2) { T.f = b.dataset.tf2; store.set("tf", T.f); renderTeams(); if (T.open) drawMatchup(T.open.homeId, T.open.awayId, T.open.u); }
+  else if (b.id === "tall") { T.all = true; renderTeams(); }
+  else if (b.dataset.mu) { const u = lgData().upcoming.find((x) => x.id === b.dataset.mu); if (u) openMatchup(u.home, u.away, u); }
+  else if (b.dataset.team) {
+    const D = lgData(), u = D.upcoming.find((x) => x.home === b.dataset.team || x.away === b.dataset.team);
+    if (u) openMatchup(u.home, u.away, u); else openMatchup(b.dataset.team, b.dataset.team, null);
+  }
+});
+document.addEventListener("change", (e) => { if (e.target.id === "tsort") { T.sort = e.target.value; store.set("ts", T.sort); renderTeams(); } });
+$("q").addEventListener("input", () => { if (VIEW === "teams") renderTeams(); });
+setView(VIEW);
+
 boot();
 setInterval(async () => {
   if (document.hidden) return;
