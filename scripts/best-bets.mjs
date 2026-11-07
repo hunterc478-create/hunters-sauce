@@ -310,8 +310,8 @@ async function main() {
         const t = dirTotal(b), sd = dirSide(b);
         if (t && script.total && t !== script.total) return false;
         if (sd && script.side && sd !== script.side) return false;
-        // a prop shouldn't go against its own matchup (unless the edge is huge)
-        if (b.kind === "prop" && b.defRank && b.edge < 0.15) {
+        // a prop never goes against its own matchup
+        if (b.kind === "prop" && b.defRank) {
           const soft = b.defRank <= b.defOf / 2;               // this defense gives up a lot of this stat
           if ((b.side === "under" && soft) || (b.side !== "under" && !soft)) return false;
         }

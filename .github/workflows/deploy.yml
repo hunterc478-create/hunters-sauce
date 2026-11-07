@@ -81,7 +81,13 @@ jobs:
         run: node scripts/teams.mjs || echo "Team trends failed; keeping the page up"
 
       - name: Best bets (every game + best of the day)
-        run: node scripts/best-bets.mjs || echo "Best bets failed; keeping the page up"
+        run: |
+          # never lose the record: start from the published one if this run doesn't have it
+          [ -f public/data/best-record.json ] || curl -fsS https://hunterc478-create.github.io/hunters-sauce/data/best-record.json -o public/data/best-record.json || true
+          cp public/data/best-record.json /tmp/best-record.backup.json 2>/dev/null || true
+          node scripts/best-bets.mjs || echo "Best bets failed; keeping the page up"
+          # if the script died before writing the record, put the backup back
+          [ -s public/data/best-record.json ] || cp /tmp/best-record.backup.json public/data/best-record.json 2>/dev/null || true
 
       - name: Build site (Prop Finder page + the data it reads)
         run: |
