@@ -45,7 +45,18 @@ const lean = (r) => (r.n ? (r.p - 0.5) * (r.n / (r.n + 8)) : 0);
 const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
 const PER = { full: [0, 4], h1: [0, 2], q1: [0, 1], q2: [1, 2], q3: [2, 3], q4: [3, 4] };
 const PERNAME = { full: "", h1: "1H", q1: "1Q", q2: "2Q", q3: "3Q", q4: "4Q" };
-const share = { full: 1, h1: 0.5, q1: 0.25, q2: 0.25, q3: 0.25, q4: 0.25 };
+let share = { full: 1, h1: 0.5, q1: 0.25, q2: 0.25, q3: 0.25, q4: 0.25 };
+/** each period's real share of scoring this season (2nd and 4th quarters score more than the 1st and 3rd) */
+function periodShares(T) {
+  const tot = { full: 0, h1: 0, q1: 0, q2: 0, q3: 0, q4: 0 };
+  for (const t of Object.values(T)) for (const g of t.games) {
+    if (!g.qf || !g.qa || g.h1f == null) continue;
+    tot.full += g.pf + g.pa; tot.h1 += g.h1f + g.h1a;
+    ["q1", "q2", "q3", "q4"].forEach((q, i) => (tot[q] += g.qf[i] + g.qa[i]));
+  }
+  if (!tot.full) return share;
+  return Object.fromEntries(Object.entries(tot).map(([k, v]) => [k, Math.round((v / tot.full) * 1000) / 1000]));
+}
 function seg(g, per) {
   if (per === "full") return [g.pf, g.pa];
   if (per === "h1") return g.h1f == null ? null : [g.h1f, g.h1a];
@@ -133,6 +144,8 @@ async function main() {
   for (const lg of ["NFL", "NCAAF"]) {
     const L = teams.leagues?.[lg]; if (!L) continue;
     const T = L.teams;
+    share = periodShares(T);
+    console.log(`best-bets: ${lg} scoring share by period ${JSON.stringify(share)}`);
     const games = {};
     const ups = (L.upcoming || []).filter((u) => u.state === "pre" && T[u.home] && T[u.away]);
     const board = boardGames(live, lg);
@@ -199,19 +212,11 @@ async function main() {
           for (const side of ["home", "away"]) {
             const me = side === "home" ? th : ta, op = side === "home" ? ta : th;
             const line = side === "home" ? hl : -hl;
-            const p = clamp(0.5 + 0.6 * (lean(me.ats) - lean(op.ats)), 0.3, 0.7);
+            const p = clamp(0.5 + 0.4 * (lean(me.ats) - lean(op.ats)), 0.4, 0.6);
             bets.push({ kind: "period", market: "spread", period: per, label: `${tShort(side)} ${P} ${sgn(line)}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
               why: [`${tShort(side)} covered the ${P} ${me.ats.w} of ${me.ats.n} times; ${tShort(side === "home" ? "away" : "home")} covered ${op.ats.w} of ${op.ats.n}`,
                 `${tShort(side)} outscore teams ${f1(me.pf)}-${f1(me.pa)} in the ${P}`,
                 `Estimated ${P} line from the full-game ${sgn(side === "home" ? u.homeLine : -u.homeLine)}: check the real line in your app`] });
-          }
-          // period moneyline (lead after the period)
-          for (const side of ["home", "away"]) {
-            const me = side === "home" ? th : ta, op = side === "home" ? ta : th;
-            const p = clamp(0.5 + 0.6 * (lean(me.win) - lean(op.win)) - (side === "home" ? u.homeLine : -u.homeLine) * share[per] * 0.03, 0.2, 0.8);
-            if (p < 0.55) continue;
-            bets.push({ kind: "period", market: "moneyline", period: per, label: `${tShort(side)} ${P} ML`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
-              why: [`${tShort(side)} won the ${P} ${me.win.w} of ${me.n} games; ${tShort(side === "home" ? "away" : "home")} won it ${op.win.w} of ${op.n}`, `Odds not in the feed: only worth it near even money or better`] });
           }
         }
         if (u.total != null) {
@@ -219,7 +224,7 @@ async function main() {
           const both = (th.pf + th.pa + ta.pf + ta.pa) / 2;
           for (const side of ["over", "under"]) {
             const s = side === "over" ? 1 : -1;
-            const p = clamp(0.5 + s * 0.6 * 0.5 * (lean(th.ou) + lean(ta.ou)) + s * clamp((both - line) / (line || 1), -0.15, 0.15) * 0.3, 0.3, 0.7);
+            const p = clamp(0.5 + s * 0.4 * 0.5 * (lean(th.ou) + lean(ta.ou)) + s * clamp((both - line) / (line || 1), -0.15, 0.15) * 0.2, 0.4, 0.6);
             bets.push({ kind: "period", market: "total", period: per, label: `${P} ${side === "over" ? "Over" : "Under"} ${line}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
               why: [`${H.short} ${P}s went over ${th.ou.w} of ${th.ou.n}; ${A.short} ${P}s ${ta.ou.w} of ${ta.ou.n}`, `Their ${P}s average ${f1(both)} points combined vs ${line}`, `Estimated ${P} total from the full-game ${u.total}: check the real line in your app`] });
           }
@@ -239,7 +244,7 @@ async function main() {
         }
         for (const g of grp.values()) {
           const mine = rows.filter((r) => r.key === nm(g.name)).sort((a, b) => b.week - a.week);
-          if (mine.length < 4) continue;
+          if (mine.length < 5) continue;
           const pos = PGRP(mine[0].pos), team = mine[0].team;
           const side = team === H.abbr ? "home" : team === A.abbr ? "away" : null;
           if (!side) continue;
@@ -262,12 +267,15 @@ async function main() {
           if (u.total != null && /yards|recept|completions/.test(g.stat)) mult *= u.total >= 48 ? 1.02 : u.total <= 40 ? 0.98 : 1;
           const last = vals.slice(0, 10);
           const hits = last.filter((x) => x > g.line).length, adjHits = last.filter((x) => x * mult > g.line).length;
-          const pHist = (adjHits + 1) / (last.length + 2);
+          const both = !!(g.over && g.under);
           // market fair chance of the over
           let fairOver;
           if (g.over && g.under) { const a = imp(g.over.odds), b = imp(g.under.odds); fairOver = a / (a + b); }
           else if (g.over) fairOver = imp(g.over.odds) / 1.045; else if (g.under) fairOver = 1 - imp(g.under.odds) / 1.045; else continue;
-          const pOver = clamp(0.5 * fairOver + 0.5 * pHist, 0.03, 0.97);
+          // his (matchup-adjusted) hit rate, pulled toward the market; one-sided prices are trusted less, and the
+          // numbers can move the market by 7 points at most
+          const k = both ? 10 : 16;
+          const pOver = clamp(clamp((adjHits + k * fairOver) / (last.length + k), fairOver - 0.07, fairOver + 0.07), 0.03, 0.97);
           const avgV = avg(last), szn = avg(vals);
           for (const s of ["over", "under"]) {
             const q = g[s]; if (!q || q.odds == null) continue;
@@ -281,20 +289,21 @@ async function main() {
             if (self) w.push(`Heads up: he's listed ${self.status}`);
             if (myLine != null) w.push(`${side === "home" ? H.short : A.short} are ${myLine < 0 ? Math.abs(myLine) + "-point favorites" : myLine > 0 ? myLine + "-point underdogs" : "a pick'em"}${u.total ? ` in a ${u.total} total` : ""}`);
             w.push(`Best price ${fmt(q.odds)}${q.book ? " at " + q.book : ""}; market says ${pct(s === "over" ? fairOver : 1 - fairOver)}, the numbers say ${pct(p)}`);
-            bets.push({ kind: "prop", market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
+            if (!both) w.splice(w.length - 1, 0, "Only one side is posted, so this price is a little less certain");
+            bets.push({ kind: "prop", oneSided: !both, market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
               label: g.stat === "anytime_td" ? `${g.name} anytime TD` : `${g.name} ${s === "over" ? "O" : "U"} ${g.line} ${S.lbl}`, odds: q.odds, book: q.book, est: false, p: r3(p), edge: r3(p * dec(q.odds) - 1), why: w.slice(0, 5) });
           }
         }
       }
 
       // keep the bets with real value: priced ones need 2%+ edge, estimated ones need a 57%+ read
-      const keep = bets.filter((b) => (b.est ? b.p >= 0.57 : b.edge >= 0.02))
-        .map((b) => ({ ...b, score: b.est ? b.edge * 0.75 : b.edge }))
+      const keep = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= 0.025))
+        .map((b) => ({ ...b, score: b.est ? b.edge * 0.6 : b.oneSided ? b.edge * 0.6 : b.edge }))
         .sort((a, b) => b.score - a.score);
       // one bet per market/period/player, best first
       const seen = new Set(), list = [];
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 6) break; }
-      for (const b of list) b.rating = b.score >= 0.06 ? "green" : "yellow";
+      for (const b of list) b.rating = b.score >= 0.05 ? "green" : "yellow";
       games[u.id] = { start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games };
