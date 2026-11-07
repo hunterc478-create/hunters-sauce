@@ -1,0 +1,308 @@
+/**
+ * Best bets for every NFL and college game this week, and the inputs for "best of the day".
+ *
+ *   in:  public/data/live.json   (NFL props with book prices; NFL + college game lines with every book + consensus)
+ *        public/data/teams.json  (every team's games: scores, halves, quarters, closing lines; this week's games)
+ *        nflverse weekly player stats (player game logs, what each defense allows to each position)
+ *        ESPN game previews (NFL injuries)
+ *   out: public/data/best-bets.json
+ *        { updatedAt, leagues: { NFL|NCAAF: { games: { [espnEventId]: { start, home, away, bets: Bet[] } } } } }
+ *
+ * How a bet is judged: start from the market's fair chance (books' no-juice consensus) and move it by what the
+ * numbers say (hit rates, matchup, injuries, game script, team trends). Edge = that chance x the best payout - 1.
+ * Halves and quarters have no odds feed: they use an estimated line (half / a quarter of the full-game number) at -110
+ * and are labeled "est. line" so the real line gets checked in the app.
+ */
+import fs from "node:fs";
+import path from "node:path";
+import zlib from "node:zlib";
+
+const DATA = path.join("public", "data");
+const read = (f) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, f), "utf8")); } catch { return null; } };
+async function get(url, type = "json") {
+  for (let i = 0; i < 3; i++) {
+    try { const r = await fetch(url, { headers: { "user-agent": "hunters-sauce" } }); if (r.ok) return type === "json" ? r.json() : Buffer.from(await r.arrayBuffer()); } catch {}
+    await new Promise((res) => setTimeout(res, 700 * (i + 1)));
+  }
+  return null;
+}
+const dec = (o) => (o > 0 ? 1 + o / 100 : 1 + 100 / -o);
+const imp = (o) => 1 / dec(o);
+const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const r3 = (x) => Math.round(x * 1000) / 1000;
+const f1 = (x) => (Math.round(x * 10) / 10).toString();
+const nm = (s) => String(s || "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, "").replace(/[^a-z0-9]/g, "");
+const ord = (n) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? "th" : ["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+const fmt = (o) => (o > 0 ? "+" + Math.round(o) : String(Math.round(o)));
+const pct = (x) => Math.round(x * 100) + "%";
+const sgn = (x) => (x > 0 ? "+" + x : x === 0 ? "PK" : String(x));
+const EST_ODDS = -110;
+
+/* ---------------- team trends ---------------- */
+function rec(games, f) { let w = 0, l = 0; for (const g of games) { const x = f(g); if (x == null) continue; if (x > 0) w++; else if (x < 0) l++; } return { w, l, n: w + l, p: w + l ? w / (w + l) : 0.5 }; }
+// shrink a rate toward 50% by sample size (8 games of evidence ~ halfway)
+const lean = (r) => (r.n ? (r.p - 0.5) * (r.n / (r.n + 8)) : 0);
+const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN);
+const PER = { full: [0, 4], h1: [0, 2], q1: [0, 1], q2: [1, 2], q3: [2, 3], q4: [3, 4] };
+const PERNAME = { full: "", h1: "1H", q1: "1Q", q2: "2Q", q3: "3Q", q4: "4Q" };
+const share = { full: 1, h1: 0.5, q1: 0.25, q2: 0.25, q3: 0.25, q4: 0.25 };
+function seg(g, per) {
+  if (per === "full") return [g.pf, g.pa];
+  if (per === "h1") return g.h1f == null ? null : [g.h1f, g.h1a];
+  if (!g.qf || !g.qa) return null;
+  const [a, b] = PER[per]; let x = 0, y = 0; for (let i = a; i < b; i++) { x += g.qf[i]; y += g.qa[i]; } return [x, y];
+}
+// how a team does in a period vs that period's share of the closing spread / total
+function trend(t, per) {
+  const G = t.games.filter((g) => seg(g, per));
+  const s = (g) => seg(g, per);
+  return {
+    n: G.length,
+    win: rec(G, (g) => s(g)[0] - s(g)[1]),
+    ats: rec(G, (g) => (g.line == null ? null : s(g)[0] - s(g)[1] + g.line * share[per])),
+    ou: rec(G, (g) => (g.total == null ? null : s(g)[0] + s(g)[1] - g.total * share[per])),
+    pf: avg(G.map((g) => s(g)[0])), pa: avg(G.map((g) => s(g)[1])),
+  };
+}
+
+/* ---------------- NFL players (nflverse) ---------------- */
+const COLS = ["completions", "attempts", "passing_yards", "passing_tds", "carries", "rushing_yards", "rushing_tds", "receptions", "targets", "receiving_yards", "receiving_tds"];
+const FIXT = { LA: "LAR", WAS: "WSH" };
+async function nflPlayers(year) {
+  const gz = await get(`https://github.com/nflverse/nflverse-data/releases/download/stats_player/stats_player_week_${year}.csv.gz`, "buf");
+  if (!gz) return null;
+  const lines = zlib.gunzipSync(gz).toString("utf8").trim().split("\n");
+  const split = (l) => { const out = []; let cur = "", q = false; for (const ch of l) { if (ch === '"') q = !q; else if (ch === "," && !q) { out.push(cur); cur = ""; } else cur += ch; } out.push(cur); return out; };
+  const hd = split(lines[0]), ix = (k) => hd.indexOf(k);
+  const I = { name: ix("player_display_name"), pos: ix("position"), team: ix("team"), opp: ix("opponent_team"), week: ix("week"), type: ix("season_type") };
+  const ci = COLS.map(ix);
+  const rows = [];
+  for (const l of lines.slice(1)) {
+    const c = split(l);
+    if (c[I.type] === "PRE") continue;
+    const v = {}; COLS.forEach((k, i) => (v[k] = Number(c[ci[i]]) || 0));
+    rows.push({ name: c[I.name], key: nm(c[I.name]), pos: c[I.pos], team: FIXT[c[I.team]] || c[I.team], opp: FIXT[c[I.opp]] || c[I.opp], week: Number(c[I.week]), v });
+  }
+  return rows;
+}
+const STAT = {
+  passing_yards: { f: (v) => v.passing_yards, lbl: "pass yds", grp: ["QB"] },
+  passing_tds: { f: (v) => v.passing_tds, lbl: "pass TDs", grp: ["QB"] },
+  completions: { f: (v) => v.completions, lbl: "completions", grp: ["QB"] },
+  passing_attempts: { f: (v) => v.attempts, lbl: "pass attempts", grp: ["QB"] },
+  rushing_yards: { f: (v) => v.rushing_yards, lbl: "rush yds", grp: ["RB", "QB", "WR"] },
+  rushing_attempts: { f: (v) => v.carries, lbl: "carries", grp: ["RB"] },
+  receiving_yards: { f: (v) => v.receiving_yards, lbl: "rec yds", grp: ["WR", "TE", "RB"] },
+  receptions: { f: (v) => v.receptions, lbl: "receptions", grp: ["WR", "TE", "RB"] },
+  rush_rec_yds: { f: (v) => v.rushing_yards + v.receiving_yards, lbl: "rush+rec yds", grp: ["RB", "WR", "TE"] },
+  anytime_td: { f: (v) => v.rushing_tds + v.receiving_tds, lbl: "TD", grp: ["RB", "WR", "TE", "QB"] },
+};
+const PGRP = (pos) => (pos === "FB" ? "RB" : pos);
+/** what each defense allows per game to a position for a stat, ranked (1 = allows the most) */
+function defenseTable(rows) {
+  const games = new Map();                            // defense -> set of weeks
+  const tot = new Map();                              // `${def}|${pos}|${stat}` -> sum
+  for (const r of rows) {
+    if (!r.opp) continue;
+    (games.get(r.opp) || games.set(r.opp, new Set()).get(r.opp)).add(r.week);
+    for (const [k, s] of Object.entries(STAT)) { const key = `${r.opp}|${PGRP(r.pos)}|${k}`; tot.set(key, (tot.get(key) || 0) + s.f(r.v)); }
+  }
+  const out = {};
+  for (const k of Object.keys(STAT)) for (const pos of ["QB", "RB", "WR", "TE"]) {
+    const list = [...games.keys()].map((d) => ({ d, pg: (tot.get(`${d}|${pos}|${k}`) || 0) / games.get(d).size }));
+    const lg = avg(list.map((x) => x.pg));
+    list.sort((a, b) => b.pg - a.pg).forEach((x, i) => (out[`${x.d}|${pos}|${k}`] = { pg: x.pg, rank: i + 1, ratio: lg ? x.pg / lg : 1, of: list.length }));
+  }
+  return out;
+}
+
+/* ---------------- game lines from the board ---------------- */
+function boardGames(live, lg) {
+  return (live?.byDay?.all?.matchups || []).filter((c) => c.matchup.league === lg && c.matchup.status === "scheduled");
+}
+const sameTeam = (a, t) => { const x = nm(a.name), y = nm(t.name); return x && y && (x === y || x.includes(y) || y.includes(x) || nm(a.shortName) === nm(t.short)); };
+
+/* ---------------- main ---------------- */
+async function main() {
+  const now = Date.now();
+  const live = read("live.json"), teams = read("teams.json");
+  if (!teams) { console.log("best-bets: no team data"); return; }
+  const year = new Date().getMonth() < 2 ? new Date().getFullYear() - 1 : new Date().getFullYear();
+  const out = { updatedAt: new Date(now).toISOString(), leagues: {} };
+
+  for (const lg of ["NFL", "NCAAF"]) {
+    const L = teams.leagues?.[lg]; if (!L) continue;
+    const T = L.teams;
+    const games = {};
+    const ups = (L.upcoming || []).filter((u) => u.state === "pre" && T[u.home] && T[u.away]);
+    const board = boardGames(live, lg);
+
+    // NFL extras: player logs, defense table, injuries
+    let rows = null, def = null;
+    const inj = {};
+    if (lg === "NFL") {
+      rows = await nflPlayers(year);
+      if (rows) def = defenseTable(rows);
+      await Promise.all(ups.map(async (u) => {
+        const s = await get(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${u.id}`);
+        for (const blk of s?.injuries || []) inj[String(blk.team?.id)] = (blk.injuries || []).map((i) => ({ name: i.athlete?.displayName, pos: i.athlete?.position?.abbreviation, status: i.status }));
+      }));
+    }
+
+    for (const u of ups) {
+      const H = T[u.home], A = T[u.away];
+      const bets = [];
+      const card = board.find((c) => sameTeam(c.matchup.home, H) && sameTeam(c.matchup.away, A));
+      const tShort = (side) => (side === "home" ? H.short || H.abbr : A.short || A.abbr);
+
+      /* --- full-game lines with real prices --- */
+      for (const v of card ? [card.recommended, ...(card.otherBets || [])] : []) {
+        if (!v || !["moneyline", "spread", "total"].includes(v.market) || !v.marketProb || !v.bestQuote) continue;
+        const odds = v.bestQuote.americanOdds, fair = v.marketProb;
+        const why = [];
+        let tilt = 0;
+        if (v.market === "total") {
+          const th = trend(H, "full"), ta = trend(A, "full");
+          const sgnSide = v.side === "over" ? 1 : -1;
+          tilt = sgnSide * 0.5 * (lean(th.ou) + lean(ta.ou));
+          const comb = (th.pf + th.pa + ta.pf + ta.pa) / 2;
+          why.push(`${H.short} games went over ${th.ou.w} of ${th.ou.n}; ${A.short} games ${ta.ou.w} of ${ta.ou.n}`);
+          if (Number.isFinite(comb)) why.push(`Their games average ${f1(comb)} total points vs this ${v.line} line`);
+        } else {
+          const me = v.side === "home" ? H : A, op = v.side === "home" ? A : H;
+          const tm = trend(me, "full"), to = trend(op, "full");
+          if (v.market === "spread") {
+            tilt = 0.5 * (lean(tm.ats) - lean(to.ats));
+            why.push(`${me.short} cover ${tm.ats.w} of ${tm.ats.n}; ${op.short} cover ${to.ats.w} of ${to.ats.n}`);
+          } else {
+            const fav = (v.line ?? 0) < 0 || imp(odds) > 0.5;
+            const r = rec(me.games.filter((g) => g.line != null && (fav ? g.line < 0 : g.line > 0)), (g) => g.pf - g.pa);
+            tilt = 0.5 * (lean(tm.win) - lean(to.win));
+            why.push(`${me.short} are ${tm.win.w}-${tm.win.l}${r.n ? ` (${r.w}-${r.l} as ${fav ? "favorite" : "underdog"})` : ""}; ${op.short} are ${to.win.w}-${to.win.l}`);
+          }
+          if (Number.isFinite(tm.pf)) why.push(`${me.short} score ${f1(tm.pf)} and allow ${f1(tm.pa)} a game; ${op.short} score ${f1(to.pf)} and allow ${f1(to.pa)}`);
+        }
+        tilt = clamp(tilt, -0.05, 0.05);
+        const p = clamp(fair + tilt, 0.02, 0.98);
+        why.push(`Best price ${fmt(odds)} at ${v.bestQuote.bookmaker?.name || "the books"}; market says ${pct(fair)}, trends move it to ${pct(p)}`);
+        bets.push({ kind: "line", market: v.market, period: "full", label: v.label, odds, book: v.bestQuote.bookmaker?.name, est: false, p: r3(p), edge: r3(p * dec(odds) - 1), why });
+      }
+
+      /* --- halves and quarters: estimated lines + trends --- */
+      const pers = lg === "NFL" ? ["h1"] : ["h1", "q1", "q2", "q3", "q4"];
+      for (const per of pers) {
+        const th = trend(H, per), ta = trend(A, per);
+        if (th.n < 4 || ta.n < 4) continue;
+        const P = PERNAME[per];
+        if (u.homeLine != null) {
+          const hl = Math.round(u.homeLine * share[per] * 2) / 2;
+          for (const side of ["home", "away"]) {
+            const me = side === "home" ? th : ta, op = side === "home" ? ta : th;
+            const line = side === "home" ? hl : -hl;
+            const p = clamp(0.5 + 0.6 * (lean(me.ats) - lean(op.ats)), 0.3, 0.7);
+            bets.push({ kind: "period", market: "spread", period: per, label: `${tShort(side)} ${P} ${sgn(line)}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
+              why: [`${tShort(side)} covered the ${P} ${me.ats.w} of ${me.ats.n} times; ${tShort(side === "home" ? "away" : "home")} covered ${op.ats.w} of ${op.ats.n}`,
+                `${tShort(side)} outscore teams ${f1(me.pf)}-${f1(me.pa)} in the ${P}`,
+                `Estimated ${P} line from the full-game ${sgn(side === "home" ? u.homeLine : -u.homeLine)}: check the real line in your app`] });
+          }
+          // period moneyline (lead after the period)
+          for (const side of ["home", "away"]) {
+            const me = side === "home" ? th : ta, op = side === "home" ? ta : th;
+            const p = clamp(0.5 + 0.6 * (lean(me.win) - lean(op.win)) - (side === "home" ? u.homeLine : -u.homeLine) * share[per] * 0.03, 0.2, 0.8);
+            if (p < 0.55) continue;
+            bets.push({ kind: "period", market: "moneyline", period: per, label: `${tShort(side)} ${P} ML`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
+              why: [`${tShort(side)} won the ${P} ${me.win.w} of ${me.n} games; ${tShort(side === "home" ? "away" : "home")} won it ${op.win.w} of ${op.n}`, `Odds not in the feed: only worth it near even money or better`] });
+          }
+        }
+        if (u.total != null) {
+          const line = Math.round(u.total * share[per] * 2) / 2;
+          const both = (th.pf + th.pa + ta.pf + ta.pa) / 2;
+          for (const side of ["over", "under"]) {
+            const s = side === "over" ? 1 : -1;
+            const p = clamp(0.5 + s * 0.6 * 0.5 * (lean(th.ou) + lean(ta.ou)) + s * clamp((both - line) / (line || 1), -0.15, 0.15) * 0.3, 0.3, 0.7);
+            bets.push({ kind: "period", market: "total", period: per, label: `${P} ${side === "over" ? "Over" : "Under"} ${line}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
+              why: [`${H.short} ${P}s went over ${th.ou.w} of ${th.ou.n}; ${A.short} ${P}s ${ta.ou.w} of ${ta.ou.n}`, `Their ${P}s average ${f1(both)} points combined vs ${line}`, `Estimated ${P} total from the full-game ${u.total}: check the real line in your app`] });
+          }
+        }
+      }
+
+      /* --- NFL player props --- */
+      if (lg === "NFL" && rows && def) {
+        const props = (live?.byDay?.all?.props || []).filter((p) => card && p.matchupId === card.matchup.id && !p.isAlt && STAT[p.stat]);
+        const grp = new Map();
+        for (const p of props) {
+          const k = nm(p.playerName) + "|" + p.stat + "|" + p.line;
+          const g = grp.get(k) || { name: p.playerName, stat: p.stat, line: p.line, over: null, under: null };
+          const q = { odds: p.bestQuote?.americanOdds, book: p.source === "kalshi" ? "Kalshi" : p.bestQuote?.bookmaker?.name };
+          if (p.side === "over" || p.side === "yes") { if (!g.over || q.odds > g.over.odds) g.over = q; } else if (!g.under || q.odds > g.under.odds) g.under = q;
+          grp.set(k, g);
+        }
+        for (const g of grp.values()) {
+          const mine = rows.filter((r) => r.key === nm(g.name)).sort((a, b) => b.week - a.week);
+          if (mine.length < 4) continue;
+          const pos = PGRP(mine[0].pos), team = mine[0].team;
+          const side = team === H.abbr ? "home" : team === A.abbr ? "away" : null;
+          if (!side) continue;
+          const opp = side === "home" ? A.abbr : H.abbr;
+          const S = STAT[g.stat];
+          const vals = mine.map((r) => S.f(r.v));
+          const me = (inj[side === "home" ? u.home : u.away] || []);
+          const self = me.find((i) => nm(i.name) === nm(g.name));
+          if (self && /out|doubt|reserve/i.test(self.status)) continue;
+          // matchup, injuries, script -> a multiplier on his numbers
+          const d = def[`${opp}|${pos}|${g.stat}`];
+          let mult = d ? 1 + (d.ratio - 1) * 0.5 : 1;
+          const why = [];
+          const outMates = me.filter((i) => /^out/i.test(i.status) && i.pos && PGRP(i.pos) === pos && nm(i.name) !== nm(g.name));
+          const recStat = /receiv|recept|rush_rec/.test(g.stat), rushStat = /rush/.test(g.stat);
+          if (outMates.length && (recStat || (rushStat && pos === "RB"))) { mult *= 1.06; why.push(`With ${outMates.slice(0, 2).map((i) => i.name).join(" and ")} out, more ${recStat ? "targets" : "carries"} open up`); }
+          const myLine = side === "home" ? u.homeLine : u.homeLine == null ? null : -u.homeLine;
+          if (myLine != null && rushStat && pos === "RB" && Math.abs(myLine) >= 6) mult *= myLine < 0 ? 1.04 : 0.96;
+          if (myLine != null && /passing|receiv|recept/.test(g.stat) && myLine >= 6) mult *= 1.03;
+          if (u.total != null && /yards|recept|completions/.test(g.stat)) mult *= u.total >= 48 ? 1.02 : u.total <= 40 ? 0.98 : 1;
+          const last = vals.slice(0, 10);
+          const hits = last.filter((x) => x > g.line).length, adjHits = last.filter((x) => x * mult > g.line).length;
+          const pHist = (adjHits + 1) / (last.length + 2);
+          // market fair chance of the over
+          let fairOver;
+          if (g.over && g.under) { const a = imp(g.over.odds), b = imp(g.under.odds); fairOver = a / (a + b); }
+          else if (g.over) fairOver = imp(g.over.odds) / 1.045; else if (g.under) fairOver = 1 - imp(g.under.odds) / 1.045; else continue;
+          const pOver = clamp(0.5 * fairOver + 0.5 * pHist, 0.03, 0.97);
+          const avgV = avg(last), szn = avg(vals);
+          for (const s of ["over", "under"]) {
+            const q = g[s]; if (!q || q.odds == null) continue;
+            if (g.stat === "anytime_td" && s === "under") continue;
+            if (q.odds < -250 || q.odds > (g.stat === "anytime_td" ? 350 : 200)) continue;
+            const p = s === "over" ? pOver : 1 - pOver;
+            const w = [];
+            w.push(`${s === "over" ? "Went over" : "Stayed under"} ${g.line} in ${s === "over" ? hits : last.length - hits} of his last ${last.length} (averaging ${f1(avgV)}, season ${f1(szn)})`);
+            if (d) w.push(`${opp} allow the ${d.rank <= d.of / 2 ? ord(d.rank) + "-most" : ord(d.of + 1 - d.rank) + "-fewest"} ${S.lbl} to ${pos}s (${f1(d.pg)} a game)`);
+            w.push(...why);
+            if (self) w.push(`Heads up: he's listed ${self.status}`);
+            if (myLine != null) w.push(`${side === "home" ? H.short : A.short} are ${myLine < 0 ? Math.abs(myLine) + "-point favorites" : myLine > 0 ? myLine + "-point underdogs" : "a pick'em"}${u.total ? ` in a ${u.total} total` : ""}`);
+            w.push(`Best price ${fmt(q.odds)}${q.book ? " at " + q.book : ""}; market says ${pct(s === "over" ? fairOver : 1 - fairOver)}, the numbers say ${pct(p)}`);
+            bets.push({ kind: "prop", market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
+              label: g.stat === "anytime_td" ? `${g.name} anytime TD` : `${g.name} ${s === "over" ? "O" : "U"} ${g.line} ${S.lbl}`, odds: q.odds, book: q.book, est: false, p: r3(p), edge: r3(p * dec(q.odds) - 1), why: w.slice(0, 5) });
+          }
+        }
+      }
+
+      // keep the bets with real value: priced ones need 2%+ edge, estimated ones need a 57%+ read
+      const keep = bets.filter((b) => (b.est ? b.p >= 0.57 : b.edge >= 0.02))
+        .map((b) => ({ ...b, score: b.est ? b.edge * 0.75 : b.edge }))
+        .sort((a, b) => b.score - a.score);
+      // one bet per market/period/player, best first
+      const seen = new Set(), list = [];
+      for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 6) break; }
+      for (const b of list) b.rating = b.score >= 0.06 ? "green" : "yellow";
+      games[u.id] = { start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
+    }
+    out.leagues[lg] = { games };
+    const all = Object.values(games).flatMap((g) => g.bets);
+    console.log(`best-bets: ${lg} · ${Object.keys(games).length} games · ${all.length} bets (${all.filter((b) => b.kind === "prop").length} props, ${all.filter((b) => b.kind === "line").length} priced lines, ${all.filter((b) => b.est).length} est. halves/quarters) · ${rows ? rows.length + " player-weeks" : "no player stats"}`);
+    const top = all.sort((a, b) => b.score - a.score).slice(0, 3);
+    for (const b of top) console.log(`  ${b.label} ${fmt(b.odds)}${b.est ? " (est)" : ""} · ${pct(b.p)} · edge ${f1(b.edge * 100)}%\n    - ${b.why.join("\n    - ")}`);
+  }
+  fs.writeFileSync(path.join(DATA, "best-bets.json"), JSON.stringify(out));
+}
+main().catch((e) => { console.error("best-bets failed:", e); process.exitCode = 0; });

@@ -80,6 +80,9 @@ jobs:
       - name: Team trends (ATS, ML, totals, first halves)
         run: node scripts/teams.mjs || echo "Team trends failed; keeping the page up"
 
+      - name: Best bets (every game + best of the day)
+        run: node scripts/best-bets.mjs || echo "Best bets failed; keeping the page up"
+
       - name: Build site (Prop Finder page + the data it reads)
         run: |
           rm -rf out && mkdir -p out/data

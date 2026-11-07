@@ -61,6 +61,7 @@ async function coreLines(lg, id, homeAbbr, awayAbbr) {
 }
 async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; await fn(items[k]); } })); }
 
+const quarters = (c) => { const ls = (c.linescores || []).map((l) => Number(l.value) || 0); return ls.length >= 4 ? ls.slice(0, 4) : null; };
 const half = (c) => { const ls = (c.linescores || []).map((l) => Number(l.value) || 0); return ls.length >= 2 ? ls[0] + ls[1] : null; };
 
 async function league(lg, year) {
@@ -90,10 +91,10 @@ async function league(lg, year) {
       if (state === "post") {
         finals++; if (homeLine != null) withLine++;
         const hs = Number(h.c.score?.value ?? h.c.score) || 0, as = Number(a.c.score?.value ?? a.c.score) || 0;
-        const h1h = half(h.c), h1a = half(a.c);
+        const h1h = half(h.c), h1a = half(a.c), qh = quarters(h.c), qa = quarters(a.c);
         const base = { id: ev.id, d: ev.date, wk: weeks[i][1], st: weeks[i][0], total };
-        h.tm.games.push({ ...base, opp: a.tm.abbr, oppId: a.tm.id, home: true, pf: hs, pa: as, h1f: h1h, h1a: h1a, line: homeLine });
-        a.tm.games.push({ ...base, opp: h.tm.abbr, oppId: h.tm.id, home: false, pf: as, pa: hs, h1f: h1a, h1a: h1h, line: homeLine == null ? undefined : -homeLine });
+        h.tm.games.push({ ...base, opp: a.tm.abbr, oppId: a.tm.id, home: true, pf: hs, pa: as, h1f: h1h, h1a: h1a, qf: qh, qa: qa, line: homeLine });
+        a.tm.games.push({ ...base, opp: h.tm.abbr, oppId: h.tm.id, home: false, pf: as, pa: hs, h1f: h1a, h1a: h1h, qf: qa, qa: qh, line: homeLine == null ? undefined : -homeLine });
       } else if (weeks[i][1] === week && weeks[i][0] === stype) {
         upcoming.push({ id: ev.id, start: ev.date, state, home: h.tm.id, away: a.tm.id, homeLine, total, hs: Number(h.c.score?.value ?? h.c.score) || 0, as: Number(a.c.score?.value ?? a.c.score) || 0, detail: comp.status?.type?.shortDetail });
       }
