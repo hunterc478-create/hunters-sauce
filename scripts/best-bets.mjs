@@ -198,7 +198,7 @@ async function main() {
         tilt = clamp(tilt, -0.05, 0.05);
         const p = clamp(fair + tilt, 0.02, 0.98);
         why.push(`Best price ${fmt(odds)} at ${v.bestQuote.bookmaker?.name || "the books"}; market says ${pct(fair)}, trends move it to ${pct(p)}`);
-        bets.push({ kind: "line", market: v.market, period: "full", label: v.label, odds, book: v.bestQuote.bookmaker?.name, est: false, p: r3(p), edge: r3(p * dec(odds) - 1), why });
+        bets.push({ kind: "line", market: v.market, period: "full", side: v.side, line: v.line ?? null, label: v.label, odds, book: v.bestQuote.bookmaker?.name, est: false, p: r3(p), edge: r3(p * dec(odds) - 1), why });
       }
 
       /* --- halves and quarters: estimated lines + trends --- */
@@ -213,7 +213,7 @@ async function main() {
             const me = side === "home" ? th : ta, op = side === "home" ? ta : th;
             const line = side === "home" ? hl : -hl;
             const p = clamp(0.5 + 0.4 * (lean(me.ats) - lean(op.ats)), 0.4, 0.6);
-            bets.push({ kind: "period", market: "spread", period: per, label: `${tShort(side)} ${P} ${sgn(line)}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
+            bets.push({ kind: "period", market: "spread", period: per, side, line, label: `${tShort(side)} ${P} ${sgn(line)}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
               why: [`${tShort(side)} covered the ${P} ${me.ats.w} of ${me.ats.n} times; ${tShort(side === "home" ? "away" : "home")} covered ${op.ats.w} of ${op.ats.n}`,
                 `${tShort(side)} outscore teams ${f1(me.pf)}-${f1(me.pa)} in the ${P}`,
                 `Estimated ${P} line from the full-game ${sgn(side === "home" ? u.homeLine : -u.homeLine)}: check the real line in your app`] });
@@ -225,7 +225,7 @@ async function main() {
           for (const side of ["over", "under"]) {
             const s = side === "over" ? 1 : -1;
             const p = clamp(0.5 + s * 0.4 * 0.5 * (lean(th.ou) + lean(ta.ou)) + s * clamp((both - line) / (line || 1), -0.15, 0.15) * 0.2, 0.4, 0.6);
-            bets.push({ kind: "period", market: "total", period: per, label: `${P} ${side === "over" ? "Over" : "Under"} ${line}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
+            bets.push({ kind: "period", market: "total", period: per, side, line, label: `${P} ${side === "over" ? "Over" : "Under"} ${line}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
               why: [`${H.short} ${P}s went over ${th.ou.w} of ${th.ou.n}; ${A.short} ${P}s ${ta.ou.w} of ${ta.ou.n}`, `Their ${P}s average ${f1(both)} points combined vs ${line}`, `Estimated ${P} total from the full-game ${u.total}: check the real line in your app`] });
           }
         }
@@ -313,5 +313,83 @@ async function main() {
     for (const b of top) console.log(`  ${b.label} ${fmt(b.odds)}${b.est ? " (est)" : ""} · ${pct(b.p)} · edge ${f1(b.edge * 100)}%\n    - ${b.why.join("\n    - ")}`);
   }
   fs.writeFileSync(path.join(DATA, "best-bets.json"), JSON.stringify(out));
+  await record(out, teams, now);
 }
+/* ---------------- record: lock each game's top 3 ~2 hours before kickoff, grade from finals ---------------- */
+const BOX = { passing: 1, rushing: 1, receiving: 1 };
+const PROP_STAT = {
+  passing_yards: (r) => r.passingYards, passing_tds: (r) => r.passingTouchdowns, completions: (r) => r.completions, passing_attempts: (r) => r.passingAttempts,
+  rushing_yards: (r) => r.rushingYards, rushing_attempts: (r) => r.rushingAttempts, receiving_yards: (r) => r.receivingYards, receptions: (r) => r.receptions,
+  rush_rec_yds: (r) => (r.rushingYards ?? 0) + (r.receivingYards ?? 0), anytime_td: (r) => (r.rushingTouchdowns ?? 0) + (r.receivingTouchdowns ?? 0),
+};
+async function boxPlayers(gid) {
+  const s = await get(`https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary?event=${gid}`);
+  if (s?.header?.competitions?.[0]?.status?.type?.state !== "post") return null;
+  const out = new Map();
+  for (const t of s?.boxscore?.players || []) for (const cat of t.statistics || []) {
+    if (!BOX[cat.name]) continue;
+    for (const a of cat.athletes || []) {
+      const k = nm(a.athlete?.displayName); const r = out.get(k) || {};
+      (cat.keys || []).forEach((key, i) => {
+        const raw = String(a.stats?.[i] ?? "");
+        if (key.includes("/")) key.split("/").forEach((kk, j) => (r[kk] = Number(raw.split("/")[j]) || 0));
+        else { const v = Number(raw.replace(/,/g, "")); if (Number.isFinite(v)) r[key] = v; }
+      });
+      out.set(k, r);
+    }
+  }
+  return out;
+}
+async function record(out, teams, now) {
+  const file = path.join(DATA, "best-record.json");
+  let prev = read("best-record.json") || (await get("https://hunterc478-create.github.io/hunters-sauce/data/best-record.json"));
+  const bets = prev?.bets || [];
+  const have = new Set(bets.map((b) => b.gid));
+  let logged = 0, graded = 0;
+  // lock
+  for (const [lg, L] of Object.entries(out.leagues)) for (const [gid, g] of Object.entries(L.games)) {
+    const mins = (new Date(g.start).getTime() - now) / 60000;
+    if (mins > 120 || mins <= 0 || have.has(gid)) continue;
+    for (const b of g.bets.slice(0, 3)) {
+      bets.push({ id: `${gid}|${b.label}`, lg, gid, start: g.start, home: g.home, away: g.away, kind: b.kind, market: b.market, period: b.period, side: b.side, line: b.line ?? null,
+        label: b.label, player: b.player, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, loggedAt: new Date(now).toISOString() });
+      logged++;
+    }
+    have.add(gid);
+  }
+  // grade
+  const boxes = new Map();
+  for (const b of bets) {
+    if (b.result) continue;
+    if (now - new Date(b.start).getTime() < 3 * 3600_000) continue;
+    let d = null;
+    if (b.kind === "prop") {
+      if (!boxes.has(b.gid)) boxes.set(b.gid, await boxPlayers(b.gid));
+      const box = boxes.get(b.gid);
+      if (box) {
+        const r = box.get(nm(b.player));
+        if (!r) { b.result = "void"; b.actual = "did not play"; }
+        else { const v = PROP_STAT[b.market]?.(r); if (v != null) { b.actual = v; d = b.side === "under" ? b.line - v : v - b.line; } }
+      }
+    } else {
+      const T = teams.leagues?.[b.lg]?.teams || {};
+      const g = (T[b.home.id]?.games || []).find((x) => x.id === b.gid && x.home);
+      const sc = g ? seg(g, b.period) : null;
+      if (sc) {
+        const [h, a] = sc;
+        b.actual = `${b.away.abbr} ${a} – ${b.home.abbr} ${h}${b.period !== "full" ? ` (${PERNAME[b.period]})` : ""}`;
+        if (b.market === "total") d = b.side === "over" ? h + a - b.line : b.line - (h + a);
+        else { const m = b.side === "home" ? h - a : a - h; d = b.market === "spread" ? m + b.line : m; }
+      }
+    }
+    if (d != null) b.result = d > 0 ? "win" : d < 0 ? "loss" : "push";
+    if (!b.result && now - new Date(b.start).getTime() > 4 * 86400_000) b.result = "void";
+    if (b.result) { b.units = b.result === "win" ? r3(dec(b.odds) - 1) : b.result === "loss" ? -1 : 0; graded++; }
+  }
+  bets.sort((a, b) => b.start.localeCompare(a.start));
+  fs.writeFileSync(file, JSON.stringify({ updatedAt: new Date(now).toISOString(), bets }));
+  const s = bets.filter((b) => b.result && b.result !== "void");
+  console.log(`best-bets record: ${logged} locked · ${graded} graded · ${s.filter((b) => b.result === "win").length}-${s.filter((b) => b.result === "loss").length} · ${f1(s.reduce((a, b) => a + b.units, 0))}u · ${bets.filter((b) => !b.result).length} open`);
+}
+
 main().catch((e) => { console.error("best-bets failed:", e); process.exitCode = 0; });
