@@ -49,6 +49,18 @@ function linesFor(comp) {
   }
   return { homeLine, total };
 }
+/** Per-game odds (ESPN core API) for finished games whose scoreboard dropped the line. */
+const CORE = { NFL: "football/leagues/nfl", NCAAF: "football/leagues/college-football" };
+async function coreLines(lg, id, homeAbbr, awayAbbr) {
+  const d = await get(`https://sports.core.api.espn.com/v2/sports/${CORE[lg]}/events/${id}/competitions/${id}/odds`);
+  const it = (d?.items || []).find((x) => x.details || x.spread != null) || (d?.items || [])[0];
+  if (!it) return null;
+  const comp = { odds: [it], competitors: [{ homeAway: "home", team: { abbreviation: homeAbbr } }, { homeAway: "away", team: { abbreviation: awayAbbr } }] };
+  const r = linesFor(comp);
+  return r.homeLine == null && r.total == null ? null : r;
+}
+async function pool(items, n, fn) { let i = 0; await Promise.all(Array.from({ length: n }, async () => { while (i < items.length) { const k = i++; await fn(items[k]); } })); }
+
 const half = (c) => { const ls = (c.linescores || []).map((l) => Number(l.value) || 0); return ls.length >= 2 ? ls[0] + ls[1] : null; };
 
 async function league(lg, year) {
@@ -90,6 +102,24 @@ async function league(lg, year) {
   return { week, teams, upcoming, finals, withLine };
 }
 
+async function fillFromCore(lg, r, prev) {
+  const cache = new Map();
+  for (const t of Object.values(prev?.leagues?.[lg]?.teams || {})) for (const g of t.games) if (g.home && (g.line != null || g.total != null)) cache.set(g.id, { homeLine: g.line, total: g.total });
+  const need = new Map();
+  for (const t of Object.values(r.teams)) for (const g of t.games) if (g.home && g.line == null) need.set(g.id, { g, t });
+  let fromCache = 0, fetched = 0;
+  const found = new Map();
+  for (const [id] of need) if (cache.has(id)) { found.set(id, cache.get(id)); fromCache++; }
+  const todo = [...need.keys()].filter((id) => !found.has(id)).slice(0, 900);
+  await pool(todo, 12, async (id) => { const { g, t } = need.get(id); const x = await coreLines(lg, id, t.abbr, g.opp); if (x) { found.set(id, x); fetched++; } });
+  for (const t of Object.values(r.teams)) for (const g of t.games) {
+    const x = found.get(g.id); if (!x) continue;
+    if (g.line == null && x.homeLine != null) g.line = g.home ? x.homeLine : -x.homeLine;
+    if (g.total == null && x.total != null) g.total = x.total;
+  }
+  return { fromCache, fetched, tried: todo.length };
+}
+
 /** NFL: fill lines ESPN didn't keep, from nflverse (spread_line = home margin the market expected). */
 async function nflverseFill(out, year) {
   const csv = await get("https://raw.githubusercontent.com/nflverse/nfldata/master/data/games.csv", "text");
@@ -119,11 +149,14 @@ async function nflverseFill(out, year) {
 async function main() {
   const d = new Date(), year = d.getMonth() < 2 ? d.getFullYear() - 1 : d.getFullYear();
   const out = { updatedAt: d.toISOString(), leagues: {} };
+  const prev = await get("https://hunterc478-create.github.io/hunters-sauce/data/teams.json");
   for (const lg of ["NFL", "NCAAF"]) {
     const r = await league(lg, year);
     if (!r) { console.log(`teams: ${lg} scoreboard didn't answer`); continue; }
     let filled = 0;
     if (lg === "NFL") filled = await nflverseFill(r, year);
+    const core = await fillFromCore(lg, r, prev);
+    console.log(`teams: ${lg} per-game odds · ${core.fromCache} games from cache · ${core.fetched}/${core.tried} fetched`);
     for (const t of Object.values(r.teams)) t.games.sort((a, b) => b.d.localeCompare(a.d));
     const h1 = Object.values(r.teams).flatMap((t) => t.games).filter((g) => g.h1f != null).length;
     const all = Object.values(r.teams).flatMap((t) => t.games).length;
