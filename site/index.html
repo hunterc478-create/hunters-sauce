@@ -92,6 +92,8 @@ img{display:block}
 .mc .tm .ln{margin-left:auto;font-size:12.5px;color:var(--mut);font-weight:600}
 .mc .tm .tg{display:flex;gap:4px}
 .tg span{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;background:var(--card2);color:var(--mut)}
+.tg span.po{background:rgba(245,158,11,.16);color:#f59e0b}.tg span.pu{background:rgba(56,189,248,.16);color:#38bdf8}
+.cmp td.co{color:#f59e0b}.cmp td.cu{color:#38bdf8}
 .tg span.pg{background:var(--grnbg);color:var(--grn)}.tg span.pr{background:var(--redbg);color:var(--red)}
 .mc .when{font-size:11px;color:var(--mut);display:flex;justify-content:space-between;margin-bottom:4px}
 .tr{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:9px 11px;margin-bottom:6px;width:100%;text-align:left}
@@ -579,13 +581,18 @@ const SORTS = {
   h1ats: ["1H cover %", (s) => rpct(s.h1ats), (s) => recTxt(s.h1ats) + " 1H ATS"],
   ml: ["Win %", (s) => rpct(s.ml), (s) => recTxt(s.ml)],
   h1ml: ["1H lead %", (s) => rpct(s.h1ml), (s) => recTxt(s.h1ml) + " at half"],
-  over: ["Over %", (s) => rpct(s.ou), (s) => recTxt(s.ou) + " O/U"],
-  under: ["Under %", (s) => (rpct(s.ou) == null ? null : 1 - rpct(s.ou)), (s) => s.ou.l + "-" + s.ou.w + (s.ou.p ? "-" + s.ou.p : "") + " U/O"],
-  h1over: ["1H over %", (s) => rpct(s.h1ou), (s) => recTxt(s.h1ou) + " 1H O/U"],
-  tt: ["Team total over %", (s) => rpct(s.tt), (s) => recTxt(s.tt) + " vs team total"],
+  over: ["Over %", (s) => rpct(s.ou), (s) => ouTxt(s.ou) + " (game total)"],
+  under: ["Under %", (s) => (rpct(s.ou) == null ? null : 1 - rpct(s.ou)), (s) => ouTxt(s.ou) + " (game total)"],
+  h1over: ["1H over %", (s) => rpct(s.h1ou), (s) => ouTxt(s.h1ou) + " (1H total)"],
+  h1under: ["1H under %", (s) => (rpct(s.h1ou) == null ? null : 1 - rpct(s.h1ou)), (s) => ouTxt(s.h1ou) + " (1H total)"],
+  tt: ["Team total over %", (s) => rpct(s.tt), (s) => ouTxt(s.tt) + " (team total)"],
+  ttu: ["Team total under %", (s) => (rpct(s.tt) == null ? null : 1 - rpct(s.tt)), (s) => ouTxt(s.tt) + " (team total)"],
   ppg: ["Points per game", (s) => s.ppg, (s) => (s.ppg ?? 0).toFixed(1) + " ppg · allow " + (s.opp ?? 0).toFixed(1)],
 };
 const tlogo = (t) => (t?.logo ? `<img src="${esc(t.logo)}" alt="" onerror="this.style.visibility='hidden'">` : "");
+const ouTxt = (r) => `${r.w} O · ${r.l} U${r.p ? " · " + r.p + " P" : ""}`;
+const ouLean = (r) => { const p = rpct(r); return p == null ? "" : p >= 0.6 ? "o" : p <= 0.4 ? "u" : ""; };
+const ouTag = (lbl, r) => { const k = ouLean(r); return `<span class="${k ? "p" + k : ""}">${lbl} ${ouTxt(r)}</span>`; };
 const tag = (lbl, r) => { const p = rpct(r); return `<span class="${p == null ? "" : p >= 0.6 ? "pg" : p <= 0.4 ? "pr" : ""}">${lbl} ${recTxt(r)}</span>`; };
 function lineTxt(u, side) {
   if (u.homeLine == null) return "";
@@ -605,7 +612,7 @@ function renderTeams() {
     const row = (side) => {
       const t = TM[u[side]], st = teamStats(t, T.f);
       return `<div class="tm">${tlogo(t)}${t.rank ? `<span class="rk">${t.rank}</span>` : ""}${esc(t.short || t.name)}<span class="ln">${side === "home" && u.total ? "O/U " + u.total + " · " : ""}${lineTxt(u, side)}</span></div>
-        <div class="tg" style="margin:0 0 6px 34px">${tag("ML", st.ml)}${tag("ATS", st.ats)}${tag("O/U", st.ou)}${tag("1H", st.h1ats)}</div>`;
+        <div class="tg" style="margin:0 0 6px 34px">${tag("ML", st.ml)}${tag("ATS", st.ats)}${ouTag("", st.ou)}${tag("1H", st.h1ats)}</div>`;
     };
     const live = u.state === "in", fin = u.state === "post";
     return `<button class="mc" data-mu="${esc(u.id)}"><div class="when"><span>${live ? `<b style="color:var(--red)">● ${esc(u.detail || "LIVE")}</b>` : fin ? "Final" : esc(new Date(u.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}</span><span>${live || fin ? esc(TM[u.away].abbr + " " + u.as + " – " + TM[u.home].abbr + " " + u.hs) : ""}</span></div>${row("away")}${row("home")}</button>`;
@@ -617,7 +624,7 @@ function renderTeams() {
   h += `<div class="sec" style="display:flex;justify-content:space-between;align-items:center"><span>Trends</span><select id="tsort" style="background:var(--card);border:1px solid var(--line);color:var(--txt);border-radius:8px;padding:4px 6px;font:inherit;text-transform:none;letter-spacing:0">${Object.entries(SORTS).map(([k, v]) => `<option value="${k}" ${k === T.sort ? "selected" : ""}>${v[0]}</option>`).join("")}</select></div>`;
   const show = T.all ? list : list.slice(0, 25);
   h += show.map(({ t, st }, i) => { const v = key(st); const pct = T.sort === "ppg";
-    return `<button class="tr" data-team="${esc(t.id)}"><span style="color:var(--mut);font-weight:700;width:20px">${i + 1}</span>${tlogo(t)}<div class="n">${t.rank ? `<span style="color:var(--mut);font-size:11px">${t.rank} </span>` : ""}${esc(t.name)}<small>${esc(txt(st))}</small></div><div class="p" style="color:${pct ? "var(--txt)" : v >= 0.6 ? "var(--grn)" : v <= 0.4 ? "var(--red)" : "var(--txt)"}">${pct ? v.toFixed(1) : Math.round(v * 100) + "%"}</div></button>`; }).join("");
+    return `<button class="tr" data-team="${esc(t.id)}"><span style="color:var(--mut);font-weight:700;width:20px">${i + 1}</span>${tlogo(t)}<div class="n">${t.rank ? `<span style="color:var(--mut);font-size:11px">${t.rank} </span>` : ""}${esc(t.name)}<small>${esc(txt(st))}</small></div><div class="p" style="color:${pct ? "var(--txt)" : /over|^tt$/.test(T.sort) && v >= 0.6 ? "#f59e0b" : /under|ttu/.test(T.sort) && v >= 0.6 ? "#38bdf8" : /over|under|tt/.test(T.sort) ? "var(--txt)" : v >= 0.6 ? "var(--grn)" : v <= 0.4 ? "var(--red)" : "var(--txt)"}">${pct ? v.toFixed(1) : Math.round(v * 100) + "%"}</div></button>`; }).join("");
   if (list.length > show.length) h += `<button class="chip" id="tall" style="display:block;margin:6px auto">Show all ${list.length} teams</button>`;
   h += `<div class="note">Lines are the closing spread and total. 1H cover = covering half the game spread; 1H over = over half the game total. Team total = the score the line implied for that team. Scores: ESPN · NFL lines: nflverse · college lines: ESPN.</div>`;
   $("teamsView").innerHTML = h;
@@ -626,13 +633,15 @@ function drawMatchup(homeId, awayId, u) {
   const TM = lgData().teams, A = TM[awayId], H = TM[homeId];
   const a = teamStats(A, T.f), hS = teamStats(H, T.f);
   const cell = (r, inv) => { const p = rpct(r); const c = p == null ? "" : (inv ? 1 - p : p) >= 0.6 ? "cg" : (inv ? 1 - p : p) <= 0.4 ? "cr" : ""; return `<td class="${c}">${recTxt(r)}<small>${p == null ? "–" : Math.round(p * 100) + "%"}</small></td>`; };
+  const ouCell = (r) => { const p = rpct(r), k = ouLean(r);
+    return `<td class="${k ? "c" + k : ""}">${ouTxt(r)}<small>${p == null ? "–" : p >= 0.5 ? Math.round(p * 100) + "% overs" : Math.round((1 - p) * 100) + "% unders"}</small></td>`; };
   const num = (x) => `<td>${x == null ? "–" : x.toFixed(1)}</td>`;
   const row = (lb, f) => `<tr>${f(a)}<td class="lb">${lb}</td>${f(hS)}</tr>`;
   const hd = (t) => `<tr class="h"><td colspan="3">${t}</td></tr>`;
   const glog = (t, st) => `<div class="box"><div style="display:flex;align-items:center;gap:8px;font-weight:800;margin-bottom:6px">${tlogo(t)}${esc(t.name)}</div><table class="gl"><tr style="color:var(--mut);font-size:10.5px"><td>Game</td><td>Score</td><td>1H</td><td>Line</td><td>ATS</td><td>O/U</td></tr>${st.games.slice(0, 8).map((g) => {
     const ats = g.line == null ? null : g.pf - g.pa + g.line, ou = g.total == null ? null : g.pf + g.pa - g.total;
     const mk = (x, w, l) => (x == null ? "–" : x > 0 ? `<b style="color:var(--grn)">${w}</b>` : x < 0 ? `<b style="color:var(--red)">${l}</b>` : "P");
-    return `<tr><td>${g.home ? "vs" : "@"} ${esc(g.opp)}</td><td><b style="color:${g.pf > g.pa ? "var(--grn)" : g.pf < g.pa ? "var(--red)" : "var(--txt)"}">${g.pf}-${g.pa}</b></td><td>${g.h1f ?? "–"}-${g.h1a ?? "–"}</td><td>${g.line == null ? "–" : g.line > 0 ? "+" + g.line : g.line}</td><td>${mk(ats, "C", "L")}</td><td>${mk(ou, "O", "U")}</td></tr>`; }).join("")}</table></div>`;
+    return `<tr><td>${g.home ? "vs" : "@"} ${esc(g.opp)}</td><td><b style="color:${g.pf > g.pa ? "var(--grn)" : g.pf < g.pa ? "var(--red)" : "var(--txt)"}">${g.pf}-${g.pa}</b></td><td>${g.h1f ?? "–"}-${g.h1a ?? "–"}</td><td>${g.line == null ? "–" : g.line > 0 ? "+" + g.line : g.line}</td><td>${mk(ats, "C", "L")}</td><td>${ou == null ? "–" : ou > 0 ? '<b style="color:#f59e0b">O</b>' : ou < 0 ? '<b style="color:#38bdf8">U</b>' : "P"}</td></tr>`; }).join("")}</table></div>`;
   $("sheet").innerHTML = `<div class="dh"><button class="back" id="back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="m15 18-6-6 6-6"/></svg>Teams</button>
     <div class="vs"><div class="side">${tlogo(A).replace("<img", '<img style="width:54px;height:54px"')}${A.rank ? `<small style="color:var(--mut)">#${A.rank}</small>` : ""}${esc(A.short || A.name)}</div>
     <div class="mid">${u ? `<b>${esc(A.abbr)} ${lineTxt(u, "away") || "–"}</b><br>O/U <b>${u.total ?? "–"}</b><br>${esc(new Date(u.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }))}` : "vs"}</div>
@@ -641,12 +650,12 @@ function drawMatchup(homeId, awayId, u) {
     <div class="box"><table class="cmp">
       ${hd("Moneyline")}${row("Record", (s) => cell(s.ml))}${row("As favorite", (s) => cell(s.fav))}${row("As underdog", (s) => cell(s.dog))}
       ${hd("Spread")}${row("Cover (ATS)", (s) => cell(s.ats))}${row("Avg margin", (s) => num(s.mar))}
-      ${hd("Points & totals")}${row("Over / under", (s) => cell(s.ou))}${row("Team total over", (s) => cell(s.tt))}${row("Points per game", (s) => num(s.ppg))}${row("Points allowed", (s) => num(s.opp))}
-      ${hd("First half")}${row("Led at half", (s) => cell(s.h1ml))}${row("1H cover", (s) => cell(s.h1ats))}${row("1H over", (s) => cell(s.h1ou))}${row("1H points", (s) => num(s.h1pf))}${row("1H allowed", (s) => num(s.h1pa))}
+      ${hd("Points & totals")}${row("Game over / under", (s) => ouCell(s.ou))}${row("Team total O / U", (s) => ouCell(s.tt))}${row("Points per game", (s) => num(s.ppg))}${row("Points allowed", (s) => num(s.opp))}
+      ${hd("First half")}${row("Led at half", (s) => cell(s.h1ml))}${row("1H cover", (s) => cell(s.h1ats))}${row("1H over / under", (s) => ouCell(s.h1ou))}${row("1H points", (s) => num(s.h1pf))}${row("1H allowed", (s) => num(s.h1pa))}
       ${hd("Second half")}${row("2H points", (s) => num(s.h2pf))}${row("2H allowed", (s) => num(s.h2pa))}
     </table></div>
     ${glog(A, a)}${glog(H, hS)}
-    <div class="note">Records are ${T.f === "l5" ? "the last 5 games" : T.f === "home" ? "home games" : T.f === "away" ? "road games" : "this season"} (W-L-push). Green = 60%+, red = 40% or less.</div>`;
+    <div class="note">Records are ${T.f === "l5" ? "the last 5 games" : T.f === "home" ? "home games" : T.f === "away" ? "road games" : "this season"} Win/loss rows (W-L-push): green = 60%+, red = 40% or less. Over/under rows: orange = goes over 60%+, blue = goes under 60%+.</div>`;
 }
 function openMatchup(homeId, awayId, u) { T.open = { homeId, awayId, u }; history.pushState({ d: 1 }, ""); drawMatchup(homeId, awayId, u); $("sheet").classList.add("open"); $("sheet").scrollTop = 0; }
 let VIEW = store.get("view") === "teams" ? "teams" : "props";
