@@ -77,6 +77,9 @@ jobs:
             curl -fsS "$SITE_URL/data/prop-results.json" -o public/data/prop-results.json || true
           fi
 
+      - name: Team trends (ATS, ML, totals, first halves)
+        run: node scripts/teams.mjs || echo "Team trends failed; keeping the page up"
+
       - name: Build site (Prop Finder page + the data it reads)
         run: |
           rm -rf out && mkdir -p out/data
