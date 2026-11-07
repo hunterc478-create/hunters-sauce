@@ -147,6 +147,7 @@ async function main() {
     share = periodShares(T);
     console.log(`best-bets: ${lg} scoring share by period ${JSON.stringify(share)}`);
     const games = {};
+    let droppedTotal = 0;
     const ups = (L.upcoming || []).filter((u) => u.state === "pre" && T[u.home] && T[u.away]);
     const board = boardGames(live, lg);
 
@@ -290,24 +291,46 @@ async function main() {
             if (myLine != null) w.push(`${side === "home" ? H.short : A.short} are ${myLine < 0 ? Math.abs(myLine) + "-point favorites" : myLine > 0 ? myLine + "-point underdogs" : "a pick'em"}${u.total ? ` in a ${u.total} total` : ""}`);
             w.push(`Best price ${fmt(q.odds)}${q.book ? " at " + q.book : ""}; market says ${pct(s === "over" ? fairOver : 1 - fairOver)}, the numbers say ${pct(p)}`);
             if (!both) w.splice(w.length - 1, 0, "Only one side is posted, so this price is a little less certain");
-            bets.push({ kind: "prop", oneSided: !both, market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
+            bets.push({ kind: "prop", oneSided: !both, defRank: d?.rank, defOf: d?.of, market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
               label: g.stat === "anytime_td" ? `${g.name} anytime TD` : `${g.name} ${s === "over" ? "O" : "U"} ${g.line} ${S.lbl}`, odds: q.odds, book: q.book, est: false, p: r3(p), edge: r3(p * dec(q.odds) - 1), why: w.slice(0, 5) });
           }
         }
       }
 
-      // keep the bets with real value: priced ones need 2%+ edge, estimated ones need a 57%+ read
-      const keep = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= 0.025))
+      // one story per game: decide the total lean (over/under) and the side lean first, then drop bets that fight it
+      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= 0.025));
+      const dirTotal = (b) => (b.market === "total" || b.kind === "prop" ? (b.side === "under" ? "under" : "over") : null);
+      const dirSide = (b) => ((b.market === "spread" || b.market === "moneyline") && (b.side === "home" || b.side === "away") ? b.side : null);
+      const lean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
+      const script = {
+        total: lean(bets.filter((b) => b.kind === "line" && b.market === "total"), dirTotal) || lean(bets.filter((b) => b.kind === "period" && b.market === "total" && b.period === "h1"), dirTotal) || lean([...ok].sort((a, b) => b.edge - a.edge).slice(0, 1), dirTotal),
+        side: lean(bets.filter((b) => b.kind === "line" && b.market !== "total"), dirSide) || lean(bets.filter((b) => b.kind === "period" && b.market === "spread" && b.period === "h1"), dirSide),
+      };
+      const fits = (b) => {
+        const t = dirTotal(b), sd = dirSide(b);
+        if (t && script.total && t !== script.total) return false;
+        if (sd && script.side && sd !== script.side) return false;
+        // a prop shouldn't go against its own matchup (unless the edge is huge)
+        if (b.kind === "prop" && b.defRank && b.edge < 0.15) {
+          const soft = b.defRank <= b.defOf / 2;               // this defense gives up a lot of this stat
+          if ((b.side === "under" && soft) || (b.side !== "under" && !soft)) return false;
+        }
+        return true;
+      };
+      const dropped = ok.filter((b) => !fits(b)).length;
+      droppedTotal += dropped;
+      const keep = ok.filter(fits)
         .map((b) => ({ ...b, score: b.est ? b.edge * 0.6 : b.oneSided ? b.edge * 0.6 : b.edge }))
         .sort((a, b) => b.score - a.score);
       // one bet per market/period/player, best first
       const seen = new Set(), list = [];
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 6) break; }
       for (const b of list) b.rating = b.score >= 0.05 ? "green" : "yellow";
-      games[u.id] = { start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
+      games[u.id] = { script, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games };
     const all = Object.values(games).flatMap((g) => g.bets);
+    console.log(`best-bets: ${lg} · ${droppedTotal} bets dropped for fighting their game's script or matchup`);
     console.log(`best-bets: ${lg} · ${Object.keys(games).length} games · ${all.length} bets (${all.filter((b) => b.kind === "prop").length} props, ${all.filter((b) => b.kind === "line").length} priced lines, ${all.filter((b) => b.est).length} est. halves/quarters) · ${rows ? rows.length + " player-weeks" : "no player stats"}`);
     const top = all.sort((a, b) => b.score - a.score).slice(0, 3);
     for (const b of top) console.log(`  ${b.label} ${fmt(b.odds)}${b.est ? " (est)" : ""} · ${pct(b.p)} · edge ${f1(b.edge * 100)}%\n    - ${b.why.join("\n    - ")}`);
