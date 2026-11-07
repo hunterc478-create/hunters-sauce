@@ -115,6 +115,21 @@ img{display:block}
 .gl{font-size:12px;width:100%;border-collapse:collapse}
 .gl td{padding:6px 3px;border-bottom:1px solid var(--line);text-align:center}
 .gl td:first-child{text-align:left}
+.bb{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:8px;width:100%;text-align:left;display:block}
+.bb.green{border-color:rgba(34,197,94,.45)}
+.bb .hd{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--mut);font-weight:700}
+.bb .hd .rt{display:flex;align-items:center;gap:5px}
+.bb .row1{display:flex;align-items:center;gap:10px;margin-top:8px}
+.bb .row1 .hs{width:42px;height:42px;flex-basis:42px}
+.bb .row1 .lb{flex:1;min-width:0;font-weight:800;font-size:16px;line-height:1.25}
+.bb .row1 .od{text-align:right}.bb .row1 .od b{display:block;font-size:17px;font-weight:800}.bb .row1 .od small{color:var(--mut);font-size:10.5px;font-weight:600}
+.bb .mt{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.bb .mt span{background:var(--card2);border-radius:7px;padding:3px 7px;font-size:11px;color:var(--mut);font-weight:700}
+.bb .mt span b{color:var(--txt)}.bb .mt span.e b{color:var(--grn)}.bb .mt span.est{background:rgba(234,179,8,.15);color:var(--yel)}
+.bb ul{list-style:none;margin:9px 0 0;padding:8px 10px;background:rgba(249,115,22,.07);border-left:3px solid var(--acc);border-radius:8px}
+.bb li{font-size:12.3px;line-height:1.45;color:#c9d2df;padding:1px 0 1px 12px;position:relative}
+.bb li:before{content:"•";position:absolute;left:1px;color:var(--acc)}
+.bb .more{font-size:11.5px;color:var(--acc);font-weight:700;margin-top:4px}
 .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px;margin-left:10px}
 .seg button{padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;color:var(--mut)}
 .seg button.on{background:var(--acc);color:#000}
@@ -397,8 +412,8 @@ function render() {
       <div class="mid"><div class="nm">${esc(r.name)}${inj}</div><div class="sub">${esc(r.pos || "")} · ${esc(r.team)} ${esc(opp)}${g ? " · " + esc(gameTime(g)) : ""}</div><div class="prop">${lineTxt}${px}</div></div>
       <div class="hits">${r.result != null && line != null ? `<div class="hit ${r.result > line ? "g1" : "r1"}" style="width:62px"><small>FINAL</small><b>${r.result} ${r.result > line ? "✓" : "✗"}</b></div>` : ""}${r.st ? (r.result != null ? hitBox("L10", r.st.l10) : hitBox("L5", r.st.l5) + hitBox("L10", r.st.l10) + hitBox("SZN", r.st.szn)) : pl ? '<span class="spin"></span>' : ""}</div></button>`;
   };
-  $("list").innerHTML = !list.length ? `<div class="empty">${S.loading ? '<span class="spin"></span> Loading props…' : (CFB && !S.game ? "Tap a game above to see its players.<br>No book lines for college: tap a player and type the line from your app." : "Nothing here. Try another game or stat.")}</div>` :
-    lined.map(html).join("") + (done.length ? `<div class="sec">Final · how the lines did</div>` + done.map(html).join("") : "") + (bare.length ? `<div class="sec">${lined.length ? "No lines yet" : "Players"} · line = their median · tap to set yours</div>` + bare.slice(0, 120).map(html).join("") : "");
+  $("list").innerHTML = bestHtml() + (!list.length ? `<div class="empty">${S.loading ? '<span class="spin"></span> Loading props…' : (CFB && !S.game ? "Tap a game above to see its players.<br>No book lines for college: tap a player and type the line from your app." : "Nothing here. Try another game or stat.")}</div>` :
+    lined.map(html).join("") + (done.length ? `<div class="sec">Final · how the lines did</div>` + done.map(html).join("") : "") + (bare.length ? `<div class="sec">${lined.length ? "No lines yet" : "Players"} · line = their median · tap to set yours</div>` + bare.slice(0, 120).map(html).join("") : ""));
   const t = S.bundleAt ? new Date(S.bundleAt) : null;
   $("upd").textContent = t && !CFB ? "Lines " + t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Live";
 }
@@ -534,13 +549,60 @@ async function boot() {
   S.loading = true; render();
   try { await loadScoreboard(); } catch { $("upd").textContent = "Couldn't reach ESPN"; }
   render();
-  await loadLines();
+  await Promise.all([loadLines(), loadBest()]);
   document.querySelectorAll("[data-m]").forEach((b) => b.classList.toggle("on", b.dataset.m === MODE));
   document.title = "Hunter's Sauce · " + L.label + " Prop Finder";
   const teams = CFB ? [...new Set(S.props.map((p) => p.team))].filter((t) => S.teams[t]) : Object.keys(S.teams);
   await Promise.all(teams.map((t) => loadRoster(t).then((r) => { rosterP[t].done = r; })));
   S.loading = false; render();
 }
+/* ================= BEST BETS ================= */
+let BEST = null; const openWhy = new Set();
+async function loadBest() { try { BEST = await j("data/best-bets.json?" + Date.now()); } catch { BEST = null; } }
+function bestFor() {
+  const G = BEST?.leagues?.[L.lid]?.games || {};
+  if (S.game) { const g = G[S.game]; return { title: "Best bets for this game", list: g ? g.bets.slice(0, 3).map((b) => ({ b, g, gid: S.game })) : [], empty: g ? "Nothing worth betting in this game right now." : "No best bets for this game (it may have started)." }; }
+  // whole day: today's games, else the next day with games
+  const now = Date.now();
+  const ent = Object.entries(G).filter(([, g]) => new Date(g.start).getTime() > now);
+  const dayOf = (iso) => new Date(iso).toLocaleDateString("en-CA");
+  const days = [...new Set(ent.map(([, g]) => dayOf(g.start)))].sort();
+  const day = days[0];
+  const pool = ent.filter(([, g]) => dayOf(g.start) === day).flatMap(([gid, g]) => g.bets.slice(0, 2).map((b) => ({ b, g, gid })));
+  pool.sort((x, y) => y.b.score - x.b.score);
+  const label = day ? new Date(day + "T12:00").toLocaleDateString([], { weekday: "long" }) : "";
+  return { title: `Best bets · ${day === dayOf(new Date().toISOString()) ? "today" : label}`, list: pool.slice(0, 10), empty: "No best bets right now. They update every 30 minutes." };
+}
+function bestHtml() {
+  if (!BEST || S.q) return "";
+  const { title, list, empty } = bestFor();
+  if (S.stat !== "all") return "";
+  let h = `<div class="sec" style="color:var(--acc)">🔥 ${esc(title)}</div>`;
+  if (!list.length) return h + `<div class="empty" style="padding:16px">${esc(empty)}</div>`;
+  h += list.map(({ b, g, gid }, i) => {
+    const key = gid + "|" + b.label, open = openWhy.has(key);
+    const pl = b.kind === "prop" ? findPlayer(b.player, b.team) : null;
+    const tm = b.kind === "prop" ? (g.home.abbr === b.team ? g.home : g.away) : null;
+    const pic = pl ? `<div class="hs"><img class="face" src="${face(pl.id)}" onerror="this.remove()" alt="">${tm?.logo ? `<img class="tl" src="${esc(tm.logo)}" alt="">` : ""}</div>`
+      : `<div style="display:flex;gap:2px">${[g.away, g.home].map((t) => (t.logo ? `<img src="${esc(t.logo)}" style="width:22px;height:22px;object-fit:contain" alt="">` : "")).join("")}</div>`;
+    const when = new Date(g.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
+    const why = open ? b.why : b.why.slice(0, 3);
+    return `<button class="bb ${b.rating}" data-bb="${esc(key)}" ${pl ? `data-bp="${esc(pl.id)}" data-bs="${esc(b.market)}" data-bl="${b.line ?? ""}" data-bn="${esc(b.player)}" data-bt="${esc(b.team)}"` : ""}>
+      <div class="hd"><span>${i + 1}. ${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when)}</span><span class="rt">${b.rating === "green" ? "🟢 Strong" : "🟡 Lean"}</span></div>
+      <div class="row1">${pic}<div class="lb">${esc(b.label)}</div><div class="od"><b>${fmtOdds(b.odds)}</b><small>${b.est ? "est. line" : esc(b.book || "")}</small></div></div>
+      <div class="mt"><span>Hits <b>${Math.round(b.p * 100)}%</b></span><span class="e">Edge <b>+${(b.edge * 100).toFixed(1)}%</b></span>${b.est ? `<span class="est">Check real line in your app</span>` : ""}${b.kind === "prop" ? "<span>Prop</span>" : b.period !== "full" ? `<span>${esc(b.period.toUpperCase())}</span>` : ""}</div>
+      <ul>${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>${b.why.length > 3 && !open ? `<div class="more">+ ${b.why.length - 3} more reason${b.why.length - 3 > 1 ? "s" : ""} (tap)</div>` : ""}
+    </button>`;
+  }).join("");
+  return h + `<div class="sec">All props</div>`;
+}
+document.addEventListener("click", (e) => {
+  const c = e.target.closest(".bb"); if (!c) return;
+  if (!openWhy.has(c.dataset.bb)) { openWhy.add(c.dataset.bb); render(); return; }
+  if (c.dataset.bp) openPlayer(c.dataset.bp, c.dataset.bs, c.dataset.bl, c.dataset.bn, c.dataset.bt);
+});
+setInterval(() => { if (!document.hidden) loadBest().then(() => { if (!S.detail && VIEW === "props") render(); }); }, 10 * 60000);
+
 /* ================= TEAMS TAB ================= */
 const T = { data: null, f: store.get("tf") || "season", sort: store.get("ts") || "ats", open: null };
 async function loadTeams() {
