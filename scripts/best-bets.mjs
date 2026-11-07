@@ -301,10 +301,10 @@ async function main() {
       const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= 0.025));
       const dirTotal = (b) => (b.market === "total" || b.kind === "prop" ? (b.side === "under" ? "under" : "over") : null);
       const dirSide = (b) => ((b.market === "spread" || b.market === "moneyline") && (b.side === "home" || b.side === "away") ? b.side : null);
-      const lean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
+      const pickLean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
       const script = {
-        total: lean(bets.filter((b) => b.kind === "line" && b.market === "total"), dirTotal) || lean(bets.filter((b) => b.kind === "period" && b.market === "total" && b.period === "h1"), dirTotal) || lean([...ok].sort((a, b) => b.edge - a.edge).slice(0, 1), dirTotal),
-        side: lean(bets.filter((b) => b.kind === "line" && b.market !== "total"), dirSide) || lean(bets.filter((b) => b.kind === "period" && b.market === "spread" && b.period === "h1"), dirSide),
+        total: pickLean(bets.filter((b) => b.kind === "line" && b.market === "total"), dirTotal) || pickLean(bets.filter((b) => b.kind === "period" && b.market === "total" && b.period === "h1"), dirTotal) || pickLean([...ok].sort((a, b) => b.edge - a.edge).slice(0, 1), dirTotal),
+        side: pickLean(bets.filter((b) => b.kind === "line" && b.market !== "total"), dirSide) || pickLean(bets.filter((b) => b.kind === "period" && b.market === "spread" && b.period === "h1"), dirSide),
       };
       const fits = (b) => {
         const t = dirTotal(b), sd = dirSide(b);
