@@ -162,6 +162,13 @@ async function main() {
     const all = Object.values(r.teams).flatMap((t) => t.games).length;
     console.log(`teams: ${lg} week ${r.week} · ${Object.keys(r.teams).length} teams · ${r.finals} finals · lines on ${r.withLine} from ESPN${lg === "NFL" ? ` + ${filled / 2} from nflverse` : ""} · halves on ${h1}/${all} team-games · ${r.upcoming.length} games this week (${r.upcoming.filter((u) => u.homeLine != null).length} with a spread)`);
     // college: only keep FBS teams that played this season
+    // sanity: favorites should win ~65-80% and cover ~50%, overs ~50%
+    const gs = Object.values(r.teams).flatMap((t) => t.games).filter((g) => g.home && g.line != null && g.line !== 0);
+    const favWin = gs.filter((g) => (g.line < 0) === (g.pf > g.pa)).length;
+    const cover = gs.filter((g) => g.pf - g.pa + g.line > 0).length;
+    const ou = gs.filter((g) => g.total != null && g.pf + g.pa !== g.total);
+    const over = ou.filter((g) => g.pf + g.pa > g.total).length;
+    console.log(`teams: ${lg} check · favorites won ${Math.round((100 * favWin) / gs.length)}% · home covered ${Math.round((100 * cover) / gs.length)}% · overs ${Math.round((100 * over) / Math.max(1, ou.length))}% (${gs.length} games)`);
     out.leagues[lg] = { week: r.week, teams: r.teams, upcoming: r.upcoming };
   }
   fs.mkdirSync(path.dirname(OUT), { recursive: true });
