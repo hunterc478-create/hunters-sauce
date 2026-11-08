@@ -1,0 +1,18 @@
+name: Record peek (temporary)
+on: workflow_dispatch
+jobs:
+  p:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -fsS https://hunterc478-create.github.io/hunters-sauce/data/best-record.json -o r.json
+          python3 - <<'PY'
+          import json
+          b=[x for x in json.load(open('r.json'))['bets'] if x['lg']=='NFL']
+          for x in sorted(b,key=lambda x:x['start']):
+            print(f"{x['start'][11:16]} {x['away']['abbr']}@{x['home']['abbr']:4} {x.get('result','open'):5} {x.get('units',0):+.2f} | {x['label']} {x['odds']} ({x.get('book','')}) edge {x['edge']*100:.1f}% p {x['p']*100:.0f}% | actual {x.get('actual','')}")
+          s=[x for x in b if x.get('result') in ('win','loss','push')]
+          print("NFL:", sum(x['result']=='win' for x in s),"-",sum(x['result']=='loss' for x in s), f"{sum(x['units'] for x in s):+.2f}u")
+          for k in ('prop','line','period'):
+            t=[x for x in s if x['kind']==k]; print(k, sum(x['result']=='win' for x in t),"-",sum(x['result']=='loss' for x in t), f"{sum(x['units'] for x in t):+.2f}u")
+          PY
