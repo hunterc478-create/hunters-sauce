@@ -1,8 +1,0 @@
-name: Odds credits (temporary)
-on: workflow_dispatch
-jobs:
-  c:
-    runs-on: ubuntu-latest
-    steps:
-      - env: { K: "${{ secrets.THE_ODDS_API_KEY }}" }
-        run: curl -sS -D - -o /dev/null "https://api.the-odds-api.com/v4/sports?apiKey=$K" | grep -i "x-requests"
