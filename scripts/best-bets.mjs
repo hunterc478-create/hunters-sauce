@@ -399,7 +399,7 @@ async function main() {
       // one bet per market/period/player, best first
       const seen = new Set(), list = [];
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 6) break; }
-      for (const b of list) b.rating = b.score >= 0.08 ? "green" : "yellow";
+      for (const b of list) b.rating = !b.est && b.edge >= 0.07 ? "green" : "yellow";   // strong = 7%+ edge at a real price
       games[u.id] = { script, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
