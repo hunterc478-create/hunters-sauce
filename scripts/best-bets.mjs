@@ -127,6 +127,35 @@ function defenseTable(rows) {
   return out;
 }
 
+/* ---------------- lineups: who's actually playing ---------------- */
+const isOut = (st) => /out|reserve|doubt|suspend/i.test(st || "");
+const NEW_OUT = (st) => /^out|doubt/i.test(st || "") && !/reserve/i.test(st || "");     // new this week (IR is already in the recent stats)
+const QB_DEP = /passing|completions|receiv|recept|rush_rec/;                         // stats that ride on the QB
+/** The team's usual QB, who's expected to start this week, and the weeks that QB started. */
+function teamQB(rows, team, inj) {
+  const byWeek = new Map();
+  for (const r of rows) if (r.team === team && r.pos === "QB" && r.v.attempts >= 10) { const c = byWeek.get(r.week); if (!c || r.v.attempts > c.v.attempts) byWeek.set(r.week, r); }
+  const weeks = [...byWeek.keys()].sort((a, b) => b - a);
+  if (!weeks.length) return null;
+  const starterOf = (w) => byWeek.get(w).name;
+  const recent = weeks.slice(0, 4).map(starterOf);
+  const count = (n) => recent.filter((x) => x === n).length;
+  const usual = [...new Set(recent)].sort((a, b) => count(b) - count(a) || recent.indexOf(a) - recent.indexOf(b))[0];
+  const status = (n) => inj.find((i) => nm(i.name) === nm(n))?.status;
+  // candidates: most recent starters first, then anyone else on the team who threw
+  const names = [...new Set([...weeks.map(starterOf), ...rows.filter((r) => r.team === team && r.pos === "QB").sort((a, b) => b.week - a.week).map((r) => r.name)])];
+  const expected = names.find((n) => !isOut(status(n))) || null;
+  const qbWeeks = weeks.filter((w) => starterOf(w) === expected);
+  return { usual, usualStatus: status(usual), expected, changed: !!expected && expected !== usual, qbWeeks, starts: qbWeeks.length };
+}
+/** Weeks where the player had his normal role (skips games he barely played, e.g. left hurt). */
+function roleWeeks(mine) {
+  const inv = (r) => (r.pos === "QB" ? r.v.attempts : r.v.targets + r.v.carries);
+  const xs = mine.map(inv).sort((a, b) => a - b), med = xs[xs.length >> 1] || 0;
+  return mine.filter((r) => med < 3 || inv(r) >= 0.35 * med).map((r) => r.week);
+}
+const DB = /^(CB|S|FS|SS|DB)$/, RUSH = /^(DE|DT|NT|EDGE|OLB|DL)$/;
+
 /* ---------------- game lines from the board ---------------- */
 function boardGames(live, lg) {
   return (live?.byDay?.all?.matchups || []).filter((c) => c.matchup.league === lg && c.matchup.status === "scheduled");
@@ -148,6 +177,7 @@ async function main() {
     console.log(`best-bets: ${lg} scoring share by period ${JSON.stringify(share)}`);
     const games = {};
     let droppedTotal = 0;
+    const ctxOut = {};
     const ups = (L.upcoming || []).filter((u) => u.state === "pre" && T[u.home] && T[u.away]);
     const board = boardGames(live, lg);
 
@@ -234,6 +264,9 @@ async function main() {
 
       /* --- NFL player props --- */
       if (lg === "NFL" && rows && def) {
+        const injH = inj[u.home] || [], injA = inj[u.away] || [];
+        const qbs = { home: teamQB(rows, H.abbr, injH), away: teamQB(rows, A.abbr, injA) };
+        const dOut = { home: injH.filter((i) => NEW_OUT(i.status)), away: injA.filter((i) => NEW_OUT(i.status)) };
         const props = (live?.byDay?.all?.props || []).filter((p) => card && p.matchupId === card.matchup.id && !p.isAlt && STAT[p.stat]);
         const grp = new Map();
         for (const p of props) {
@@ -244,29 +277,52 @@ async function main() {
           grp.set(k, g);
         }
         for (const g of grp.values()) {
-          const mine = rows.filter((r) => r.key === nm(g.name)).sort((a, b) => b.week - a.week);
-          if (mine.length < 5) continue;
-          const pos = PGRP(mine[0].pos), team = mine[0].team;
+          const allMine = rows.filter((r) => r.key === nm(g.name)).sort((a, b) => b.week - a.week);
+          if (!allMine.length) continue;
+          const pos = PGRP(allMine[0].pos), team = allMine[0].team;
           const side = team === H.abbr ? "home" : team === A.abbr ? "away" : null;
           if (!side) continue;
-          const opp = side === "home" ? A.abbr : H.abbr;
+          const opp = side === "home" ? A.abbr : H.abbr, oside = side === "home" ? "away" : "home";
           const S = STAT[g.stat];
+          // only games that look like this week: his normal role, and (for passing stats) the QB who starts this week
+          const qb = qbs[side], ctxKey = nm(g.name);
+          const rw = new Set(roleWeeks(allMine));
+          const needQB = QB_DEP.test(g.stat) && qb?.changed;
+          const qbW = new Set(qb?.qbWeeks || []);
+          let mine = allMine.filter((r) => rw.has(r.week) && (!needQB || qbW.has(r.week)));
+          const flags = [];
+          if (qb?.changed && (QB_DEP.test(g.stat) || pos === "QB")) flags.push(`New QB: ${qb.expected}${qb.usualStatus ? ` (${qb.usual} ${/reserve/i.test(qb.usualStatus) ? "on IR" : qb.usualStatus.toLowerCase()})` : ""}`);
+          const ctx = (ctxOut[ctxKey] ||= { team, pos, weeks: [...rw].sort((a, b) => b - a), qbWeeks: qb?.changed ? [...qbW].sort((a, b) => b - a) : null, flags: [] });
+          for (const f of flags) if (!ctx.flags.includes(f)) ctx.flags.push(f);
+          const newQBthin = needQB && mine.length < 3;
+          if (mine.length < (needQB ? 2 : 5)) continue;
           const vals = mine.map((r) => S.f(r.v));
           const me = (inj[side === "home" ? u.home : u.away] || []);
           const self = me.find((i) => nm(i.name) === nm(g.name));
+          if (self && !ctx.flags.some((f) => f.startsWith("Listed"))) ctx.flags.push(`Listed ${self.status}`);
           if (self && /out|doubt|reserve/i.test(self.status)) continue;
           // matchup, injuries, script -> a multiplier on his numbers
           const d = def[`${opp}|${pos}|${g.stat}`];
           let mult = d ? 1 + (d.ratio - 1) * 0.5 : 1;
           const why = [];
-          const outMates = me.filter((i) => /^out/i.test(i.status) && i.pos && PGRP(i.pos) === pos && nm(i.name) !== nm(g.name));
+          const outMates = me.filter((i) => NEW_OUT(i.status) && i.pos && PGRP(i.pos) === pos && nm(i.name) !== nm(g.name));
+          if (outMates.length) { const f = `Teammate out: ${outMates[0].name}`; if (!ctx.flags.includes(f)) ctx.flags.push(f); }
+          // the defense he faces: starters newly out
+          const dbs = dOut[oside].filter((i) => DB.test(i.pos || "")), rushers = dOut[oside].filter((i) => RUSH.test(i.pos || ""));
+          if (/receiv|recept|passing|completions/.test(g.stat) && dbs.length) {
+            mult *= dbs.length >= 2 ? 1.05 : 1.02;
+            why.push(`${opp}'s secondary is missing ${dbs.slice(0, 2).map((i) => i.name).join(" and ")}`);
+            const f = `${opp} missing ${dbs.length} DB${dbs.length > 1 ? "s" : ""}`; if (!ctx.flags.includes(f)) ctx.flags.push(f);
+          }
+          if (/passing/.test(g.stat) && rushers.length >= 2) { mult *= 1.02; why.push(`${opp} are without pass rushers ${rushers.slice(0, 2).map((i) => i.name).join(" and ")}`); }
+          if (needQB) why.unshift(`${qb.expected} starts at QB${qb.usualStatus ? ` with ${qb.usual} ${/reserve/i.test(qb.usualStatus) ? "on IR" : "out"}` : ""}: these numbers only use ${mine.length} game${mine.length === 1 ? "" : "s"} with him`);
           const recStat = /receiv|recept|rush_rec/.test(g.stat), rushStat = /rush/.test(g.stat);
           if (outMates.length && (recStat || (rushStat && pos === "RB"))) { mult *= 1.06; why.push(`With ${outMates.slice(0, 2).map((i) => i.name).join(" and ")} out, more ${recStat ? "targets" : "carries"} open up`); }
           const myLine = side === "home" ? u.homeLine : u.homeLine == null ? null : -u.homeLine;
           if (myLine != null && rushStat && pos === "RB" && Math.abs(myLine) >= 6) mult *= myLine < 0 ? 1.04 : 0.96;
           if (myLine != null && /passing|receiv|recept/.test(g.stat) && myLine >= 6) mult *= 1.03;
           if (u.total != null && /yards|recept|completions/.test(g.stat)) mult *= u.total >= 48 ? 1.02 : u.total <= 40 ? 0.98 : 1;
-          const last = vals.slice(0, 10);
+          const last = vals.slice(0, 8);
           const hits = last.filter((x) => x > g.line).length, adjHits = last.filter((x) => x * mult > g.line).length;
           const both = !!(g.over && g.under);
           // market fair chance of the over
@@ -281,6 +337,7 @@ async function main() {
           for (const s of ["over", "under"]) {
             const q = g[s]; if (!q || q.odds == null) continue;
             if (g.stat === "anytime_td" && s === "under") continue;
+            if (newQBthin && s !== "under") continue;            // new QB and almost no games with him: no overs that ride on him
             if (q.odds < -250 || q.odds > (g.stat === "anytime_td" ? 350 : 200)) continue;
             const p = s === "over" ? pOver : 1 - pOver;
             const w = [];
@@ -328,7 +385,8 @@ async function main() {
       for (const b of list) b.rating = b.score >= 0.05 ? "green" : "yellow";
       games[u.id] = { script, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
-    out.leagues[lg] = { games };
+    out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
+    if (lg === "NFL") { const ch = Object.values(ctxOut).filter((c) => c.qbWeeks); console.log(`best-bets: NFL lineups · ${Object.keys(ctxOut).length} prop players checked · ${ch.length} on teams with a new QB · ${Object.values(ctxOut).filter((c) => c.flags.length).length} with a warning`); }
     const all = Object.values(games).flatMap((g) => g.bets);
     console.log(`best-bets: ${lg} · ${droppedTotal} bets dropped for fighting their game's script or matchup`);
     console.log(`best-bets: ${lg} · ${Object.keys(games).length} games · ${all.length} bets (${all.filter((b) => b.kind === "prop").length} props, ${all.filter((b) => b.kind === "line").length} priced lines, ${all.filter((b) => b.est).length} est. halves/quarters) · ${rows ? rows.length + " player-weeks" : "no player stats"}`);
