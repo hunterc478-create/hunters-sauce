@@ -450,7 +450,7 @@ async function record(out, teams, now) {
     if (mins > 40 || mins <= 0 || have.has(gid)) continue;      // after the props refresh (40-90 min out), before kickoff
     for (const b of g.bets.slice(0, 3)) {
       bets.push({ id: `${gid}|${b.label}`, lg, gid, start: g.start, home: g.home, away: g.away, kind: b.kind, market: b.market, period: b.period, side: b.side, line: b.line ?? null,
-        label: b.label, player: b.player, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, loggedAt: new Date(now).toISOString() });
+        label: b.label, player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, loggedAt: new Date(now).toISOString() });
       logged++;
     }
     have.add(gid);

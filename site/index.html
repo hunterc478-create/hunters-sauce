@@ -620,9 +620,16 @@ function recHtml() {
   }
   return h;
 }
+const rateOf = (b) => (!b.est && b.edge >= 0.07 ? "green" : "yellow");
+const lockedFor = (pred) => (BREC?.bets || []).filter((b) => b.lg === L.lid && pred(b)).map((b) => ({ b: { ...b, why: b.why || [], locked: true }, g: { start: b.start, home: b.home, away: b.away }, gid: b.gid }));
 function bestFor() {
   const G = BEST?.leagues?.[L.lid]?.games || {};
-  if (S.game) { const g = G[S.game]; return { title: "Best bets for this game", list: g ? g.bets.slice(0, 3).map((b) => ({ b, g, gid: S.game })) : [], empty: g ? "Nothing worth betting in this game right now." : "No best bets for this game (it may have started)." }; }
+  if (S.game) {
+    const g = G[S.game];
+    if (g && new Date(g.start).getTime() > Date.now()) return { title: "Best bets for this game", list: g.bets.slice(0, 3).map((b) => ({ b, g, gid: S.game })), empty: "Nothing worth betting in this game right now." };
+    const lk = lockedFor((b) => b.gid === S.game);
+    return { title: "Locked bets for this game", list: lk, empty: "No bets were locked for this game." };
+  }
   // whole day: today's games, else the next day with games
   const now = Date.now();
   const ent = Object.entries(G).filter(([, g]) => new Date(g.start).getTime() > now);
@@ -634,13 +641,7 @@ function bestFor() {
   const label = day ? new Date(day + "T12:00").toLocaleDateString([], { weekday: "long" }) : "";
   return { title: `Best bets · ${day === dayOf(new Date().toISOString()) ? "today" : label}`, list: pool.slice(0, 10), empty: "No best bets right now. They update every 30 minutes." };
 }
-function bestHtml() {
-  if (!BEST || S.q) return "";
-  const { title, list, empty } = bestFor();
-  if (S.stat !== "all") return "";
-  let h = recHtml() + `<div class="sec" style="color:var(--acc)">🔥 ${esc(title)}</div>`;
-  if (!list.length) return h + `<div class="empty" style="padding:16px">${esc(empty)}</div>`;
-  h += list.map(({ b, g, gid }, i) => {
+function cardHtml(b, g, gid, i) {
     const key = gid + "|" + b.label, open = openWhy.has(key);
     const pl = b.kind === "prop" ? findPlayer(b.player, b.team) : null;
     const tm = b.kind === "prop" ? (g.home.abbr === b.team ? g.home : g.away) : null;
@@ -648,13 +649,25 @@ function bestHtml() {
       : `<div style="display:flex;gap:2px">${[g.away, g.home].map((t) => (t.logo ? `<img src="${esc(t.logo)}" style="width:22px;height:22px;object-fit:contain" alt="">` : "")).join("")}</div>`;
     const when = new Date(g.start).toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" });
     const why = open ? b.why : b.why.slice(0, 3);
-    return `<button class="bb ${b.rating}" data-bb="${esc(key)}" ${pl ? `data-bp="${esc(pl.id)}" data-bs="${esc(b.market)}" data-bl="${b.line ?? ""}" data-bn="${esc(b.player)}" data-bt="${esc(b.team)}"` : ""}>
-      <div class="hd"><span>${i + 1}. ${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when)}</span><span class="rt">${b.rating === "green" ? "🟢 Strong" : "🟡 Lean"}</span></div>
+    return `<button class="bb ${rateOf(b)}" data-bb="${esc(key)}" ${pl ? `data-bp="${esc(pl.id)}" data-bs="${esc(b.market)}" data-bl="${b.line ?? ""}" data-bn="${esc(b.player)}" data-bt="${esc(b.team)}"` : ""}>
+      <div class="hd"><span>${i + 1}. ${esc(g.away.abbr)} @ ${esc(g.home.abbr)} · ${esc(when)}</span><span class="rt">${b.locked ? `<span class="rb ${b.result || "open"}">${b.result ? b.result.toUpperCase() : "🔒 LOCKED"}</span>` : ""}${rateOf(b) === "green" ? "🟢 Strong" : "🟡 Lean"}</span></div>
       <div class="row1">${pic}<div class="lb">${esc(b.label)}</div><div class="od"><b>${fmtOdds(b.odds)}</b><small>${b.est ? "est. line" : esc(b.book || "")}</small></div></div>
       <div class="mt"><span>Hits <b>${Math.round(b.p * 100)}%</b></span><span class="e">Edge <b>+${(b.edge * 100).toFixed(1)}%</b></span>${b.est ? `<span class="est">Check real line in your app</span>` : ""}${b.kind === "prop" ? "<span>Prop</span>" : b.period !== "full" ? `<span>${esc(b.period.toUpperCase())}</span>` : ""}</div>
-      <ul>${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>${b.why.length > 3 && !open ? `<div class="more">+ ${b.why.length - 3} more reason${b.why.length - 3 > 1 ? "s" : ""} (tap)</div>` : ""}
+      ${b.locked && b.actual != null ? `<div class="mt"><span>Result <b>${esc(b.actual)}</b></span></div>` : ""}${why.length ? `<ul>${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}${b.why.length > 3 && !open ? `<div class="more">+ ${b.why.length - 3} more reason${b.why.length - 3 > 1 ? "s" : ""} (tap)</div>` : ""}
     </button>`;
-  }).join("");
+}
+function bestHtml() {
+  if (!BEST || S.q) return "";
+  const { title, list, empty } = bestFor();
+  if (S.stat !== "all") return "";
+  let h = recHtml() + `<div class="sec" style="color:var(--acc)">🔥 ${esc(title)}</div>`;
+  if (!list.length) return h + `<div class="empty" style="padding:16px">${esc(empty)}</div>`;
+  h += list.map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("");
+  if (!S.game) {
+    const today = new Date().toLocaleDateString("en-CA");
+    const lk = lockedFor((b) => new Date(b.start).toLocaleDateString("en-CA") === today && new Date(b.start).getTime() <= Date.now() + 40 * 60000);
+    if (lk.length) h += `<div class="sec" style="color:var(--acc)">🔒 Locked today · ${lk.length}</div>` + lk.sort((x, y) => (y.b.edge || 0) - (x.b.edge || 0)).map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("");
+  }
   return h + `<div class="sec">All props</div>`;
 }
 document.addEventListener("click", (e) => {
