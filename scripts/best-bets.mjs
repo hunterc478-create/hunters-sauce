@@ -197,6 +197,7 @@ async function main() {
       const H = T[u.home], A = T[u.away];
       const bets = [];
       const card = board.find((c) => sameTeam(c.matchup.home, H) && sameTeam(c.matchup.away, A));
+      const qbG = lg === "NFL" && rows ? { home: teamQB(rows, H.abbr, inj[u.home] || []), away: teamQB(rows, A.abbr, inj[u.away] || []) } : {};
       const tShort = (side) => (side === "home" ? H.short || H.abbr : A.short || A.abbr);
 
       /* --- full-game lines with real prices --- */
@@ -208,25 +209,36 @@ async function main() {
         if (v.market === "total") {
           const th = trend(H, "full"), ta = trend(A, "full");
           const sgnSide = v.side === "over" ? 1 : -1;
-          tilt = sgnSide * 0.5 * (lean(th.ou) + lean(ta.ou));
           const comb = (th.pf + th.pa + ta.pf + ta.pa) / 2;
+          const recSig = sgnSide * (lean(th.ou) + lean(ta.ou)), avgSig = sgnSide * (comb - v.line);
+          // only lean when the over/under records and the scoring average point the same way
+          tilt = recSig > 0 && avgSig > 0 ? 0.35 * Math.abs(lean(th.ou) + lean(ta.ou)) + Math.min(0.01, Math.abs(comb - v.line) / 200) : 0;
           why.push(`${H.short} games went over ${th.ou.w} of ${th.ou.n}; ${A.short} games ${ta.ou.w} of ${ta.ou.n}`);
           if (Number.isFinite(comb)) why.push(`Their games average ${f1(comb)} total points vs this ${v.line} line`);
         } else {
           const me = v.side === "home" ? H : A, op = v.side === "home" ? A : H;
           const tm = trend(me, "full"), to = trend(op, "full");
           if (v.market === "spread") {
-            tilt = 0.5 * (lean(tm.ats) - lean(to.ats));
+            tilt = 0.35 * (lean(tm.ats) - lean(to.ats));
             why.push(`${me.short} cover ${tm.ats.w} of ${tm.ats.n}; ${op.short} cover ${to.ats.w} of ${to.ats.n}`);
           } else {
             const fav = (v.line ?? 0) < 0 || imp(odds) > 0.5;
             const r = rec(me.games.filter((g) => g.line != null && (fav ? g.line < 0 : g.line > 0)), (g) => g.pf - g.pa);
-            tilt = 0.5 * (lean(tm.win) - lean(to.win));
+            tilt = 0.35 * (lean(tm.win) - lean(to.win));
             why.push(`${me.short} are ${tm.win.w}-${tm.win.l}${r.n ? ` (${r.w}-${r.l} as ${fav ? "favorite" : "underdog"})` : ""}; ${op.short} are ${to.win.w}-${to.win.l}`);
           }
           if (Number.isFinite(tm.pf)) why.push(`${me.short} score ${f1(tm.pf)} and allow ${f1(tm.pa)} a game; ${op.short} score ${f1(to.pf)} and allow ${f1(to.pa)}`);
         }
-        tilt = clamp(tilt, -0.05, 0.05);
+        tilt = clamp(tilt, -0.03, 0.03);
+        // a brand-new QB: don't back that team on a side, and say so either way
+        let qbSkip = false;
+        if (v.market !== "total") {
+          const mySide = v.side, opSide = v.side === "home" ? "away" : "home";
+          const mq = qbG[mySide], oq = qbG[opSide];
+          if (mq?.changed && mq.starts < 3) { qbSkip = true; }
+          if (oq?.changed) why.push(`${opSide === "home" ? H.short : A.short} start ${oq.expected} at QB (${oq.starts} start${oq.starts === 1 ? "" : "s"} this year)`);
+        } else for (const sd of ["home", "away"]) { const q = qbG[sd]; if (q?.changed) why.push(`⚠️ ${sd === "home" ? H.short : A.short} start ${q.expected} at QB`); }
+        if (qbSkip) continue;
         const p = clamp(fair + tilt, 0.02, 0.98);
         why.push(`Best price ${fmt(odds)} at ${v.bestQuote.bookmaker?.name || "the books"}; market says ${pct(fair)}, trends move it to ${pct(p)}`);
         bets.push({ kind: "line", market: v.market, period: "full", side: v.side, line: v.line ?? null, label: v.label, odds, book: v.bestQuote.bookmaker?.name, est: false, p: r3(p), edge: r3(p * dec(odds) - 1), why });
@@ -243,7 +255,7 @@ async function main() {
           for (const side of ["home", "away"]) {
             const me = side === "home" ? th : ta, op = side === "home" ? ta : th;
             const line = side === "home" ? hl : -hl;
-            const p = clamp(0.5 + 0.4 * (lean(me.ats) - lean(op.ats)), 0.4, 0.6);
+            const p = clamp(0.5 + 0.3 * (lean(me.ats) - lean(op.ats)), 0.42, 0.58);
             bets.push({ kind: "period", market: "spread", period: per, side, line, label: `${tShort(side)} ${P} ${sgn(line)}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
               why: [`${tShort(side)} covered the ${P} ${me.ats.w} of ${me.ats.n} times; ${tShort(side === "home" ? "away" : "home")} covered ${op.ats.w} of ${op.ats.n}`,
                 `${tShort(side)} outscore teams ${f1(me.pf)}-${f1(me.pa)} in the ${P}`,
@@ -255,7 +267,9 @@ async function main() {
           const both = (th.pf + th.pa + ta.pf + ta.pa) / 2;
           for (const side of ["over", "under"]) {
             const s = side === "over" ? 1 : -1;
-            const p = clamp(0.5 + s * 0.4 * 0.5 * (lean(th.ou) + lean(ta.ou)) + s * clamp((both - line) / (line || 1), -0.15, 0.15) * 0.2, 0.4, 0.6);
+            const recS = s * (lean(th.ou) + lean(ta.ou)), avgS = s * (both - line);
+            if (!(recS > 0 && avgS > 0)) continue;                  // records and averages must agree
+            const p = clamp(0.5 + 0.3 * 0.5 * Math.abs(lean(th.ou) + lean(ta.ou)) + clamp(Math.abs(both - line) / (line || 1), 0, 0.15) * 0.15, 0.42, 0.58);
             bets.push({ kind: "period", market: "total", period: per, side, line, label: `${P} ${side === "over" ? "Over" : "Under"} ${line}`, odds: EST_ODDS, est: true, p: r3(p), edge: r3(p * dec(EST_ODDS) - 1),
               why: [`${H.short} ${P}s went over ${th.ou.w} of ${th.ou.n}; ${A.short} ${P}s ${ta.ou.w} of ${ta.ou.n}`, `Their ${P}s average ${f1(both)} points combined vs ${line}`, `Estimated ${P} total from the full-game ${u.total}: check the real line in your app`] });
           }
@@ -341,6 +355,8 @@ async function main() {
             if (newQBthin && s !== "under") continue;            // new QB and almost no games with him: no overs that ride on him
             if (q.odds < -250 || q.odds > (g.stat === "anytime_td" ? 350 : 200)) continue;
             const p = s === "over" ? pOver : 1 - pOver;
+            const myHits = (s === "over" ? hits : last.length - hits) / Math.max(1, last.length);
+            if (myHits < imp(q.odds) - 0.05) continue;            // his history has to back the price, not just the matchup
             const w = [];
             w.push(`${s === "over" ? "Went over" : "Stayed under"} ${g.line} in ${s === "over" ? hits : last.length - hits} of his last ${last.length} (averaging ${f1(avgV)}, season ${f1(szn)})`);
             if (d) w.push(`${opp} allow the ${d.rank <= d.of / 2 ? ord(d.rank) + "-most" : ord(d.of + 1 - d.rank) + "-fewest"} ${S.lbl} to ${pos}s (${f1(d.pg)} a game)`);
@@ -383,7 +399,7 @@ async function main() {
       // one bet per market/period/player, best first
       const seen = new Set(), list = [];
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 6) break; }
-      for (const b of list) b.rating = b.score >= 0.05 ? "green" : "yellow";
+      for (const b of list) b.rating = b.score >= 0.08 ? "green" : "yellow";
       games[u.id] = { script, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
