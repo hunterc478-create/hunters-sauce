@@ -267,6 +267,7 @@ async function main() {
         const injH = inj[u.home] || [], injA = inj[u.away] || [];
         const qbs = { home: teamQB(rows, H.abbr, injH), away: teamQB(rows, A.abbr, injA) };
         const dOut = { home: injH.filter((i) => NEW_OUT(i.status)), away: injA.filter((i) => NEW_OUT(i.status)) };
+        for (const sd of ["home", "away"]) { const q = qbs[sd]; if (q?.changed) console.log(`best-bets: QB change · ${sd === "home" ? H.abbr : A.abbr}: ${q.expected} starts (usual ${q.usual}${q.usualStatus ? ", " + q.usualStatus : ""}) · ${q.starts} start(s) with him`); }
         const props = (live?.byDay?.all?.props || []).filter((p) => card && p.matchupId === card.matchup.id && !p.isAlt && STAT[p.stat]);
         const grp = new Map();
         for (const p of props) {
