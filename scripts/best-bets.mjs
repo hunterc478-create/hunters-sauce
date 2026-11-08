@@ -344,6 +344,7 @@ async function main() {
           const last = vals.slice(0, 8);
           const hits = last.filter((x) => x > g.line).length, adjHits = last.filter((x) => x * mult > g.line).length;
           const both = !!(g.over && g.under);
+          if (!both && g.stat !== "anytime_td") continue;          // one-sided prices are usually raised lines: skip
           // market fair chance of the over
           let fairOver;
           if (g.over && g.under) { const a = imp(g.over.odds), b = imp(g.under.odds); fairOver = a / (a + b); }
@@ -376,7 +377,9 @@ async function main() {
       }
 
       // one story per game: decide the total lean (over/under) and the side lean first, then drop bets that fight it
-      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= 0.025));
+      // books shade overs (the public bets them), so an over has to clear a higher bar than an under
+      const isOver = (b) => (b.kind === "prop" && b.side !== "under") || (b.market === "total" && b.side === "over");
+      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= (isOver(b) ? 0.05 : 0.025)));
       const dirTotal = (b) => (b.market === "total" || b.kind === "prop" ? (b.side === "under" ? "under" : "over") : null);
       const dirSide = (b) => ((b.market === "spread" || b.market === "moneyline") && (b.side === "home" || b.side === "away") ? b.side : null);
       const pickLean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
@@ -402,7 +405,7 @@ async function main() {
         .sort((a, b) => b.score - a.score);
       // one bet per market/period/player, best first
       const seen = new Set(), list = [];
-      for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 6) break; }
+      for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 2) break; }   // max 2 per game: one wrong read can't sink 3 units
       for (const b of list) b.rating = !b.est && b.edge >= 0.07 ? "green" : "yellow";   // strong = 7%+ edge at a real price
       games[u.id] = { script, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
