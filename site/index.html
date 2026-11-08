@@ -141,6 +141,9 @@ img{display:block}
 .bb li{font-size:12.3px;line-height:1.45;color:#c9d2df;padding:1px 0 1px 12px;position:relative}
 .bb li:before{content:"•";position:absolute;left:1px;color:var(--acc)}
 .bb .more{font-size:11.5px;color:var(--acc);font-weight:700;margin-top:4px}
+.flags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.flags span{font-size:10.5px;font-weight:700;color:var(--yel);background:rgba(234,179,8,.13);border-radius:6px;padding:1px 6px}
+.box.warn{border-color:rgba(234,179,8,.45);font-size:12.5px;font-weight:600;line-height:1.6}
 .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:2px;margin-left:10px}
 .seg button{padding:4px 10px;border-radius:8px;font-size:12px;font-weight:800;color:var(--mut)}
 .seg button.on{background:var(--acc);color:#000}
@@ -370,12 +373,28 @@ function rows() {
   return out;
 }
 function thisGame(team) { return S.teams[team]?.game; }
+/* lineup context from the updater: games that match this week (normal role, this week's QB) + warnings */
+const QB_DEP = /passing|completions|receiv|recept|rush_rec/;
+function lineupCtx(name) { if (CFB) return null; return BEST?.leagues?.NFL?.context?.[String(name || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\b(jr|sr|ii|iii|iv)\b\.?/g, "").replace(/[^a-z0-9]/g, "")] || null; }
+function lineupFilter(name, stat, list) {
+  const c = lineupCtx(name); if (!c) return { list, note: null };
+  const ok = new Set(c.weeks), qb = c.qbWeeks && QB_DEP.test(stat) ? new Set(c.qbWeeks) : null;
+  const yr = seasonYear();
+  const out = list.filter((x) => x.date.slice(0, 4) < yr || x.wk == null || (ok.has(x.wk) && (!qb || qb.has(x.wk))));
+  const dropped = list.length - out.length;
+  const qbName = (c.flags.find((f) => f.startsWith("New QB")) || "").replace(/^New QB: /, "").replace(/ \(.*$/, "");
+  return { list: out, note: dropped ? (qb ? `Only games with ${qbName} at QB` : "Skipping games he barely played") + ` (${dropped} left out)` : null };
+}
+function flagChips(name) {
+  const c = lineupCtx(name); if (!c || !c.flags.length) return "";
+  return `<div class="flags">${c.flags.slice(0, 3).map((f) => `<span>⚠️ ${esc(f)}</span>`).join("")}</div>`;
+}
 function rowStats(r) {
   if (!r.pl || !r.logsDone) return null;
   const g = thisGame(r.team);
   const all = series(r.logsDone, r.stat);
   if (g && g.state === "post") { const x = all.find((e) => e.id === g.id); r.result = x ? x.v : null; }
-  const v = g ? all.filter((e) => e.id !== g.id) : all;
+  const v = lineupFilter(r.name, r.stat, g ? all.filter((e) => e.id !== g.id) : all).list;
   const line = r.line ?? (v.length ? halfUp(median(v.slice(0, 10).map((x) => x.v))) : 0.5);
   if (r.stat === "anytime_td" && r.line == null) r.lineGuess = 0.5; else if (r.line == null) r.lineGuess = line;
   return { l5: rate(v, line, 5), l10: rate(v, line, 10), szn: rate(v.filter((x) => x.date.slice(0, 4) >= seasonYear()), line), line };
@@ -420,7 +439,7 @@ function render() {
     const lineTxt = r.stat === "anytime_td" ? "Anytime TD" : `${line == null ? "" : "O " + line + " "}${STATS[r.stat].short}`;
     return `<button class="row" data-p="${esc(pl?.id || "")}" data-st="${r.stat}" data-l="${line ?? ""}" data-n="${esc(r.name)}" data-t="${esc(r.team)}">
       <div class="hs">${pl ? `<img class="face" src="${face(pl.id)}" onerror="this.remove()" alt="">` : `<div class="ini">${esc(r.name.split(" ").map((x) => x[0]).join("").slice(0, 2))}</div>`}<img class="tl" src="${logo(r.team)}" alt=""></div>
-      <div class="mid"><div class="nm">${esc(r.name)}${inj}</div><div class="sub">${esc(r.pos || "")} · ${esc(r.team)} ${esc(opp)}${g ? " · " + esc(gameTime(g)) : ""}</div><div class="prop">${lineTxt}${px}</div></div>
+      <div class="mid"><div class="nm">${esc(r.name)}${inj}</div><div class="sub">${esc(r.pos || "")} · ${esc(r.team)} ${esc(opp)}${g ? " · " + esc(gameTime(g)) : ""}</div><div class="prop">${lineTxt}${px}</div>${flagChips(r.name)}</div>
       <div class="hits">${r.result != null && line != null ? `<div class="hit ${r.result > line ? "g1" : "r1"}" style="width:62px"><small>FINAL</small><b>${r.result} ${r.result > line ? "✓" : "✗"}</b></div>` : ""}${r.st ? (r.result != null ? hitBox("L10", r.st.l10) : hitBox("L5", r.st.l5) + hitBox("L10", r.st.l10) + hitBox("SZN", r.st.szn)) : pl ? '<span class="spin"></span>' : ""}</div></button>`;
   };
   $("list").innerHTML = bestHtml() + (!list.length ? `<div class="empty">${S.loading ? '<span class="spin"></span> Loading props…' : (CFB && !S.game ? "Tap a game above to see its players.<br>No book lines for college: tap a player and type the line from your app." : "Nothing here. Try another game or stat.")}</div>` :
@@ -453,7 +472,9 @@ function drawDetail() {
   const statsFor = Object.keys(STATS).filter((k) => STATS[k].pos.includes(pl.pos));
   const prop = propFor(pl, stat);
   const allRaw = D.log ? series(D.log, stat) : null;
-  const all = allRaw && g ? allRaw.filter((e) => e.id !== g.id) : allRaw;
+  const lf = allRaw ? lineupFilter(pl.name, stat, g ? allRaw.filter((e) => e.id !== g.id) : allRaw) : { list: null, note: null };
+  const all = allRaw ? (D.allGames || !lf.note ? (g ? allRaw.filter((e) => e.id !== g.id) : allRaw) : lf.list) : allRaw;
+  const ctxW = lineupCtx(pl.name);
   const finalX = allRaw && g && g.state === "post" ? allRaw.find((e) => e.id === g.id) : null;
   const prevSeries = D.prevLog ? series(D.prevLog, stat) : [];
   const vals = all ? (D.prev ? [...all, ...prevSeries] : all) : null;
@@ -478,6 +499,7 @@ function drawDetail() {
       <div class="sub" style="margin-top:3px">${g ? (opp ? (g.home.abbr === pl.team ? "vs " : "@ ") + `<img src="${logo(opp)}" style="width:15px;height:15px;display:inline;vertical-align:-3px"> ${esc(opp)} · ` : "") + esc(gameTime(g)) : "No game this week"}</div></div></div>
   </div>
   <div class="chips">${statsFor.map((k) => `<button class="chip ${k === stat ? "on" : ""}" data-ds="${k}">${STATS[k].label}${propFor(pl, k) ? " •" : ""}</button>`).join("")}</div>
+  ${ctxW && (ctxW.flags.length || lf.note) ? `<div class="box warn">${ctxW.flags.map((f) => `<div>⚠️ ${esc(f)}</div>`).join("")}${lf.note ? `<div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="color:var(--mut)">${D.allGames ? "Showing every game" : esc(lf.note)}</span><button class="chip" id="allg">${D.allGames ? "Match lineup" : "Show all"}</button></div>` : ""}</div>` : ""}
   ${liveBox}${finalX ? `<div class="box" style="display:flex;justify-content:space-between;align-items:center"><span class="livetag" style="color:var(--mut)">FINAL ${opp ? "vs " + esc(opp) : ""}</span><b style="font-size:18px;color:${finalX.v > (D.line ?? 0.5) ? "var(--grn)" : "var(--red)"}">${finalX.v} ${STATS[stat].short} ${finalX.v > (D.line ?? 0.5) ? "✓ over" : "✗ under"}</b></div>` : ""}
   <div class="box"><div class="linectl">${isTD ? "" : `<button data-ln="-1">−</button>`}<div class="lv">${isTD ? "<b>1+ TD</b>" : `<span style="font-size:15px;font-weight:700;color:var(--mut)">O/U </span><input id="lineIn" type="number" inputmode="decimal" step="0.5" value="${line}">`}<div>${prop ? (prop.line === line ? "Book line" : "Book line " + prop.line + " · tap to reset") : "Tap the number to type your app's line"}</div></div>${isTD ? "" : `<button data-ln="1">+</button>`}</div>
     ${prop ? `<div class="prices"><div>Over<b>${fmtOdds(prop.over?.odds)}</b><span style="color:var(--mut);font-size:10.5px">${esc(prop.over?.book || "")}</span></div><div>Under<b>${fmtOdds(prop.under?.odds)}</b><span style="color:var(--mut);font-size:10.5px">${esc(prop.under?.book || "")}</span></div></div>` : ""}</div>
@@ -536,6 +558,7 @@ document.addEventListener("click", async (e) => {
       if (D.live) D.live.v = STATS[D.stat].f(D.live.r) ?? 0; drawDetail(); }
     else if (t.dataset.ln) { D.line = Math.max(0.5, +(D.line + Number(t.dataset.ln) * STATS[D.stat].step).toFixed(1)); if (D.line % 1 === 0) D.line += 0.5; drawDetail(); }
     else if (t.dataset.n !== undefined) { D.n = Number(t.dataset.n); drawDetail(); }
+    else if (t.id === "allg") { D.allGames = !D.allGames; drawDetail(); }
     else if (t.id === "prev") {
       if (D.prev) { D.prev = false; drawDetail(); return; }
       D.prevLoading = true; drawDetail();
