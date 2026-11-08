@@ -20,6 +20,7 @@ const MARKETS: Partial<Record<LeagueId, { key: string; stat: PropStat; dist: "no
     { key: "player_rush_yds", stat: "rushing_yards", dist: "normal", sdShare: 0.42 },
     { key: "player_reception_yds", stat: "receiving_yards", dist: "normal", sdShare: 0.5 },
     { key: "player_receptions", stat: "receptions", dist: "poisson" },
+    { key: "player_anytime_td", stat: "anytime_td", dist: "poisson" },
   ],
   NBA: [
     { key: "player_points", stat: "points", dist: "normal", sdShare: 0.28 },
@@ -77,6 +78,8 @@ export async function getProps(league: LeagueId, game: { matchupId: string; home
       const cfg = markets.find((m) => m.key === mk.key);
       if (!cfg) continue;
       for (const o of mk.outcomes) {
+        // anytime TD comes as Yes/No with no line: treat it as over/under 0.5 TDs
+        if (mk.key === "player_anytime_td" && o.point === undefined) { o.point = 0.5; o.name = /^no$/i.test(o.name) ? "Under" : "Over"; }
         if (!o.description || o.point === undefined) continue;
         const k = `${mk.key}|${o.description}|${o.point}`;
         const r = rows.get(k) ?? { stat: cfg.stat, dist: cfg.dist, sdShare: cfg.sdShare, player: o.description, line: o.point, alt: mk.key.endsWith("_alternate"), over: [], under: [] };
@@ -102,6 +105,18 @@ export async function getProps(league: LeagueId, game: { matchupId: string; home
       }));
       const p = props[props.length - 1];
       p.modelProb = implied; p.edge = 0;
+      continue;
+    }
+    if (r.stat === "anytime_td" && r.over.length && !r.under.length) {
+      const best = r.over.reduce((a, b) => (b.price > a.price ? b : a));
+      const implied = best.price > 0 ? 100 / (best.price + 100) : -best.price / (-best.price + 100);
+      const teamSide = guessTeam(r.player, game);
+      props.push(priceProp({
+        id: `${game.matchupId}:${r.stat}:${r.player}:0.5:over`.replace(/\s+/g, "_"), matchupId: game.matchupId,
+        playerId: r.player.toLowerCase().replace(/\W+/g, "-"), playerName: r.player, team: teamSide === "home" ? game.home : teamSide === "away" ? game.away : "", stat: r.stat, line: 0.5, isAlt: false, side: "over",
+        quote: { bookmaker: { key: best.book.toLowerCase(), name: best.book }, americanOdds: best.price, updatedAt: new Date().toISOString() },
+        projection: { mean: -Math.log(Math.max(0.01, 1 - implied / 1.06)), distribution: "poisson" }, confidence,
+      }));
       continue;
     }
     if (!r.over.length || !r.under.length) continue;

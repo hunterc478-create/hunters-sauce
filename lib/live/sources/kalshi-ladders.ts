@@ -168,7 +168,7 @@ export async function kalshiLadders(league: LeagueId, cards: MatchupCardData[], 
           const p = priceProp({
             id: `k:${c.matchup.id}:${stat}:${player}:${thr}:${side}`.replace(/\s+/g, "_"), matchupId: c.matchup.id,
             playerId: player.toLowerCase().replace(/\W+/g, "-"), playerName: player, team: isHome ? c.matchup.home.name : c.matchup.away.name, position: proj.pos,
-            stat: stat === "passing_tds" ? "anytime_td" : (stat as PlayerProp["stat"]), line, isAlt: true, side,
+            stat: stat as PlayerProp["stat"], line, isAlt: !(stat === "anytime_td" && line <= 0.5), side,
             quote: { bookmaker: { key: "kalshi", name: "Kalshi" }, americanOdds: withFee(a), updatedAt: new Date().toISOString() },
             projection: proj, confidence: proj.games >= 3 ? "high" : proj.games >= 1 ? "medium" : "low", matchupNote: proj.note,
           });
