@@ -445,7 +445,7 @@ function render() {
   $("list").innerHTML = bestHtml() + (!list.length ? `<div class="empty">${S.loading ? '<span class="spin"></span> Loading props…' : (CFB && !S.game ? "Tap a game above to see its players.<br>No book lines for college: tap a player and type the line from your app." : "Nothing here. Try another game or stat.")}</div>` :
     lined.map(html).join("") + (done.length ? `<div class="sec">Final · how the lines did</div>` + done.map(html).join("") : "") + (bare.length ? `<div class="sec">${lined.length ? "No lines yet" : "Players"} · line = their median · tap to set yours</div>` + bare.slice(0, 120).map(html).join("") : ""));
   const t = S.bundleAt ? new Date(S.bundleAt) : null;
-  $("upd").textContent = t && !CFB ? "Lines " + t.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Live";
+  $("upd").textContent = t && !CFB ? "Props " + t.toLocaleString([], { weekday: "short", hour: "numeric", minute: "2-digit" }) : "Live";
 }
 
 /* ---------- player detail ---------- */
@@ -604,19 +604,19 @@ function tallyRec(list) {
 }
 function recHtml() {
   const all = BREC?.bets || [];
-  const lgBets = all;
+  const lgBets = all.filter((b) => b.lg === L.lid);
   const r = tallyRec(lgBets);
   const col = (x) => (x > 0 ? "var(--grn)" : x < 0 ? "var(--red)" : "var(--txt)");
   const u = (x) => (x >= 0 ? "+" : "") + x.toFixed(1) + "u";
   const mini = (lbl, list) => { const t = tallyRec(list); return `<div><small>${lbl}</small><b style="color:${col(t.u)}">${t.n ? u(t.u) : "–"}</b><small>${t.w}-${t.l}${t.p ? "-" + t.p : ""}</small></div>`; };
   const open = lgBets.filter((b) => !b.result).length;
-  let h = `<button class="brec" id="brec"><div class="rhd"><span>Best bets record</span><span>${r.n ? r.n + " graded" : "starts today"}${open ? " · " + open + " locked" : ""} ${RECOPEN ? "▲" : "▼"}</span></div>
+  let h = `<button class="brec" id="brec"><div class="rhd"><span>${CFB ? "College" : "NFL"} best bets record</span><span>${r.n ? r.n + " graded" : "starts today"}${open ? " · " + open + " locked" : ""} ${RECOPEN ? "▲" : "▼"}</span></div>
     <div class="big"><b style="color:${col(r.u)}">${r.n ? u(r.u) : "–"}</b><span>${r.w}-${r.l}${r.p ? "-" + r.p : ""}${r.n ? " · " + (r.roi >= 0 ? "+" : "") + (r.roi * 100).toFixed(1) + "% ROI · " + Math.round((100 * r.w) / Math.max(1, r.w + r.l)) + "% hit" : ""}</span></div>
-    <div class="minis">${mini("Props", lgBets.filter((b) => b.kind === "prop"))}${mini("Game lines", lgBets.filter((b) => b.kind === "line"))}${mini("1H / Qtrs*", lgBets.filter((b) => b.kind === "period"))}${mini("NFL", lgBets.filter((b) => b.lg === "NFL"))}${mini("CFB", lgBets.filter((b) => b.lg === "NCAAF"))}</div></button>`;
+    <div class="minis">${CFB ? mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("1st half*", lgBets.filter((b) => b.period === "h1")) + mini("Quarters*", lgBets.filter((b) => /^q/.test(b.period || ""))) : mini("Props", lgBets.filter((b) => b.kind === "prop")) + mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("1st half*", lgBets.filter((b) => b.kind === "period"))}</div></button>`;
   if (RECOPEN) {
     const done = lgBets.filter((b) => b.result).slice(0, 25), lock = lgBets.filter((b) => !b.result);
     const row = (b) => `<div class="rrow"><span class="rb ${b.result || "open"}">${b.result ? b.result.toUpperCase() : "LOCKED"}</span><div><b>${esc(b.label)}</b> <span style="color:var(--mut)">${fmtOdds(b.odds)}${b.est ? " est" : ""}</span><small>${esc(b.away.abbr)} @ ${esc(b.home.abbr)} · ${new Date(b.start).toLocaleDateString([], { month: "short", day: "numeric" })}${b.actual != null ? " · " + esc(b.actual) : ""}</small></div><span style="color:${col(b.units || 0)};font-weight:800">${b.result && b.result !== "void" ? u(b.units || 0) : ""}</span></div>`;
-    h += `<div class="rlist">${lock.map(row).join("")}${done.map(row).join("")}${!lock.length && !done.length ? '<div class="empty" style="padding:14px">Each game\'s top 3 lock about 2 hours before kickoff, then get graded after the final.</div>' : ""}<div class="note" style="padding:6px 2px">1 unit per bet. *Halves/quarters are graded at -110 on the estimated line, so check that record against your app's real lines.</div></div>`;
+    h += `<div class="rlist">${lock.map(row).join("")}${done.map(row).join("")}${!lock.length && !done.length ? '<div class="empty" style="padding:14px">Nothing locked yet.</div>' : ""}<div class="note" style="padding:6px 2px">Tracks every game\'s top 3 best bets (what you see when you tap a game; the day\'s top 10 come from these), locked in the last 40 minutes before kickoff with fresh lines. 1 unit per bet. *Halves/quarters are graded at -110 on the estimated line, so check that record against your app's real lines.</div></div>`;
   }
   return h;
 }

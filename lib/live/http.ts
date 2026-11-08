@@ -5,6 +5,8 @@
  */
 import { execFile } from "node:child_process";
 
+/** The Odds API credits left this month, from the last response (null until a request is made). */
+export const oddsCredits: { left: number | null } = { left: null };
 export const fetchLog: { url: string; status: number | string; via: "fetch" | "curl" }[] = [];
 const lastStatus = new Map<string, string>();
 
@@ -37,6 +39,7 @@ async function viaFetch(full: string): Promise<{ ok: true; data: unknown } | { o
     const t = setTimeout(() => ctrl.abort(), 20_000);
     const res = await fetch(full, { signal: ctrl.signal, headers: { "User-Agent": UA, Accept: "application/json, text/plain, */*", "Accept-Language": "en-US,en;q=0.9" } });
     clearTimeout(t);
+    if (full.includes("the-odds-api.com")) { const r = Number(res.headers.get("x-requests-remaining")); if (Number.isFinite(r) && res.headers.has("x-requests-remaining")) oddsCredits.left = r; }
     if (!res.ok) return { ok: false, status: res.status };
     return { ok: true, data: await res.json() };
   } catch (e) {

@@ -397,7 +397,7 @@ async function main() {
   fs.writeFileSync(path.join(DATA, "best-bets.json"), JSON.stringify(out));
   await record(out, teams, now);
 }
-/* ---------------- record: lock each game's top 3 ~2 hours before kickoff, grade from finals ---------------- */
+/* ---------------- record: lock each game's top 3 in the last 40 minutes before kickoff, grade from finals ---------------- */
 const BOX = { passing: 1, rushing: 1, receiving: 1 };
 const PROP_STAT = {
   passing_yards: (r) => r.passingYards, passing_tds: (r) => r.passingTouchdowns, completions: (r) => r.completions, passing_attempts: (r) => r.passingAttempts,
@@ -431,7 +431,7 @@ async function record(out, teams, now) {
   // lock
   for (const [lg, L] of Object.entries(out.leagues)) for (const [gid, g] of Object.entries(L.games)) {
     const mins = (new Date(g.start).getTime() - now) / 60000;
-    if (mins > 120 || mins <= 0 || have.has(gid)) continue;
+    if (mins > 40 || mins <= 0 || have.has(gid)) continue;      // after the props refresh (40-90 min out), before kickoff
     for (const b of g.bets.slice(0, 3)) {
       bets.push({ id: `${gid}|${b.label}`, lg, gid, start: g.start, home: g.home, away: g.away, kind: b.kind, market: b.market, period: b.period, side: b.side, line: b.line ?? null,
         label: b.label, player: b.player, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, loggedAt: new Date(now).toISOString() });

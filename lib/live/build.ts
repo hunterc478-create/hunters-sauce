@@ -18,7 +18,9 @@ import { geocode, kickoffWeather, milesBetween, tzOffsetHours } from "./places";
 import { getProps } from "./props-feed";
 import { assemble, type LiveBundle, type SourceStatus } from "./assemble";
 import { addDays, DAY_TZ, dayKey } from "./day";
-import { failureReason, fetchLog, pool } from "./http";
+import { failureReason, fetchLog, oddsCredits, pool } from "./http";
+import fs from "node:fs";
+import path from "node:path";
 import { Registry, sameTeam, type Game } from "./registry";
 import { actionNetwork } from "./sources/action-network";
 import { mlbOfficial, nbaOfficial, nhlOfficial } from "./sources/official";
@@ -334,11 +336,23 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
   // credits): scheduled runs drift (10/14 ran at 8:35 and 9:31), so a "9:00-9:29 only" window missed whole days
   // once a day: the first run from 9 AM on (runs drift, so not "9:00-9:29 only"), and never again that day; pulling on
   // every run after 9 burned 291 of Sports Plus's 500 credits by 10/16
-  const pulledToday = !!previousPropsAt && dayKey(new Date(previousPropsAt), DAY_TZ) === today;
-  if (process.env.THE_ODDS_API_KEY && (forced || (localHour >= Math.min(...PROP_HOURS) && !pulledToday))) {
+  // Per slate: each game's props are pulled once, 40-90 minutes before its kickoff (after inactives come out), so the
+  // lines are fresh for the noon, late, night, Monday and Thursday games; about 5 credits a game, alt markets skipped.
+  void PROP_HOURS; void localHour; void today;
+  const pullsFile = path.join("public", "data", "props-pulls.json");
+  let pulls: Record<string, string> = {};
+  try { pulls = JSON.parse(fs.readFileSync(pullsFile, "utf8")); } catch {
+    try { const r = await fetch(`${(process.env.SITE_URL || "").replace(/\/$/, "")}/data/props-pulls.json`); if (r.ok) pulls = await r.json(); } catch {}
+  }
+  const LEAD_MIN = Number(process.env.PROP_LEAD_MIN ?? 40), LEAD_MAX = Number(process.env.PROP_LEAD_MAX ?? 90);
+  const inWindow = (c: MatchupCardData) => { const m = (new Date(c.matchup.startTime).getTime() - now.getTime()) / 60000; return m >= LEAD_MIN && m <= LEAD_MAX; };
+  const freshPull = (c: MatchupCardData) => { const t = pulls[c.matchup.id]; return !!t && new Date(t).getTime() >= new Date(c.matchup.startTime).getTime() - 4 * 3600_000; };
+  const lowCredits = oddsCredits.left != null && oddsCredits.left < 60;
+  if (lowCredits) note("Player props (The Odds API)", false, `paused: only ${oddsCredits.left} credits left this month`);
+  if (process.env.THE_ODDS_API_KEY && !lowCredits) {
     const windowEnd = now.getTime() + PROP_WINDOW_H * 3600_000;
     // sportsbook props: NFL only (college would burn the free credits fast)
-    const soon = cards.filter((c) => c.matchup.league === "NFL" && openIds.has(c.matchup.id) && new Date(c.matchup.startTime).getTime() <= windowEnd && (forced || !pulledIds.has(c.matchup.id)))
+    const soon = cards.filter((c) => c.matchup.league === "NFL" && openIds.has(c.matchup.id) && new Date(c.matchup.startTime).getTime() <= windowEnd && (forced ? !pulledIds.has(c.matchup.id) || !freshPull(c) : inWindow(c) && !freshPull(c)))
       .sort((a, b) => a.matchup.startTime.localeCompare(b.matchup.startTime)).slice(0, PROP_GAMES);
     let loaded = 0;
     for (const c of soon) {
@@ -350,12 +364,15 @@ export async function buildLive(previousHistory: TrackedPick[], previousProps: P
       const rp = await getProps(c.matchup.league, {
         matchupId: c.matchup.id, home: c.matchup.home.name, away: c.matchup.away.name,
         homeAvgPts: (c.factors.home.ratings.offense ?? 0) + avgPts, awayAvgPts: (c.factors.away.ratings.offense ?? 0) + avgPts, homeRoster, awayRoster,
-      }, c.prediction, c.prediction.confidenceTier, PRIMETIME.has(slotOf(c.matchup.startTime).key));
-      if (rp) { props.push(...rp); loaded++; fresh.add(c.matchup.id); }
+      }, c.prediction, c.prediction.confidenceTier, false);
+      if (rp) { props.push(...rp); loaded++; fresh.add(c.matchup.id); pulls[c.matchup.id] = now.toISOString(); }
+      if (oddsCredits.left != null && oddsCredits.left < 60) { note("Player props (The Odds API)", false, `stopped early: ${oddsCredits.left} credits left`); break; }
     }
     if (soon.length) note("Player props (The Odds API)", loaded > 0,
       loaded ? `${props.length} props from ${loaded} games` : `no props: ${failureReason("https://api.the-odds-api.com")}`);
     if (props.length) { pulledProps = true; propsLoadedAt = now.toISOString(); }
+    try { fs.mkdirSync(path.dirname(pullsFile), { recursive: true }); fs.writeFileSync(pullsFile, JSON.stringify(pulls)); } catch {}
+    if (oddsCredits.left != null) notes.push(`Odds API credits left this month: ${oddsCredits.left}`);
   } else if (!process.env.THE_ODDS_API_KEY) notes.push("Player props are off: add a THE_ODDS_API_KEY secret to turn them on.");
 
   // games pulled earlier keep their props until kickoff
