@@ -170,6 +170,10 @@ async function main() {
   const year = new Date().getMonth() < 2 ? new Date().getFullYear() - 1 : new Date().getFullYear();
   const out = { updatedAt: new Date(now).toISOString(), leagues: {} };
 
+  {
+    const td = (live?.byDay?.all?.props || []).filter((p) => p.stat === "anytime_td" && !p.isAlt);
+    console.log(`best-bets: anytime TD props on the board · ${td.length} (${td.filter((p) => p.source === "kalshi").length} Kalshi, ${td.filter((p) => p.source !== "kalshi").length} sportsbook) · e.g. ${td.slice(0, 3).map((p) => p.playerName + " " + p.bestQuote?.americanOdds).join(", ")}`);
+  }
   for (const lg of ["NFL", "NCAAF"]) {
     const L = teams.leagues?.[lg]; if (!L) continue;
     const T = L.teams;
