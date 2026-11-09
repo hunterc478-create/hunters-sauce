@@ -244,8 +244,32 @@ async function main() {
         } else for (const sd of ["home", "away"]) { const q = qbG[sd]; if (q?.changed) why.push(`⚠️ ${sd === "home" ? H.short : A.short} start ${q.expected} at QB`); }
         if (qbSkip) continue;
         const p = clamp(fair + tilt, 0.02, 0.98);
+        // the reasons, checked one by one
+        const checks = [];
+        const last5 = (t) => t.games.slice(0, 5);
+        if (v.market === "total") {
+          const th = trend(H, "full"), ta = trend(A, "full"), sg = v.side === "over" ? 1 : -1;
+          const rate = (r) => (sg > 0 ? r.p : 1 - r.p);
+          if (rate(th.ou) >= 0.6 && rate(ta.ou) >= 0.5 || rate(ta.ou) >= 0.6 && rate(th.ou) >= 0.5) checks.push("Form");
+          const comb = (th.pf + th.pa + ta.pf + ta.pa) / 2;
+          if (sg * (comb - v.line) >= 2) checks.push("Matchup");
+          const l5 = avg([...last5(H), ...last5(A)].map((g) => g.pf + g.pa));
+          if (sg * (l5 - v.line) >= 2) checks.push("Trend");
+          if (sg < 0 && (qbG.home?.changed || qbG.away?.changed)) checks.push("Injury");
+        } else {
+          const me = v.side === "home" ? H : A, op = v.side === "home" ? A : H;
+          const tm = trend(me, "full"), to = trend(op, "full");
+          const r = v.market === "spread" ? [tm.ats, to.ats] : [tm.win, to.win];
+          if (r[0].p >= 0.6 && r[1].p <= 0.5) checks.push("Form");
+          if ((tm.pf - tm.pa) - (to.pf - to.pa) >= 4) checks.push("Matchup");
+          const w5 = (t) => last5(t).filter((g) => g.pf > g.pa).length;
+          if (w5(me) >= 3 && w5(op) <= 2) checks.push("Trend");
+          if (qbG[v.side === "home" ? "away" : "home"]?.changed) checks.push("Injury");
+          if (v.side === "home") checks.push("Home");
+        }
+        if (p * dec(odds) - 1 >= 0.03) checks.push("Price");
         why.push(`Best price ${fmt(odds)} at ${v.bestQuote.bookmaker?.name || "the books"}; market says ${pct(fair)}, trends move it to ${pct(p)}`);
-        bets.push({ kind: "line", market: v.market, period: "full", side: v.side, line: v.line ?? null, label: v.label, odds, book: v.bestQuote.bookmaker?.name, est: false, p: r3(p), edge: r3(p * dec(odds) - 1), why });
+        bets.push({ kind: "line", market: v.market, period: "full", side: v.side, line: v.line ?? null, label: v.label, odds, book: v.bestQuote.bookmaker?.name, est: false, p: r3(p), edge: r3(p * dec(odds) - 1), why, checks });
       }
 
       /* --- halves and quarters: estimated lines + trends --- */
@@ -370,7 +394,20 @@ async function main() {
             if (myLine != null) w.push(`${side === "home" ? H.short : A.short} are ${myLine < 0 ? Math.abs(myLine) + "-point favorites" : myLine > 0 ? myLine + "-point underdogs" : "a pick'em"}${u.total ? ` in a ${u.total} total` : ""}`);
             w.push(`Best price ${fmt(q.odds)}${q.book ? " at " + q.book : ""}; market says ${pct(s === "over" ? fairOver : 1 - fairOver)}, the numbers say ${pct(p)}`);
             if (!both) w.splice(w.length - 1, 0, "Only one side is posted, so this price is a little less certain");
-            bets.push({ kind: "prop", oneSided: !both, defRank: d?.rank, defOf: d?.of, market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
+            // the reasons, checked one by one
+            const checks = [], over = s !== "under";
+            if (last.length >= 5 && myHits >= 0.6) checks.push("Form");
+            if (d && (over ? d.rank <= 10 : d.rank >= d.of - 9)) checks.push("Matchup");
+            if (over ? (outMates.length && (recStat || (rushStat && pos === "RB"))) || ((/receiv|recept|passing|completions/.test(g.stat)) && dbs.length) : needQB || (self && /question/i.test(self.status))) checks.push("Injury");
+            if (myLine != null && u.total != null) {
+              const passy = /passing|receiv|recept|completions/.test(g.stat), rb = rushStat && pos === "RB";
+              const fits = over ? u.total >= 46 || (passy && myLine >= 3) || (rb && myLine <= -3) : u.total <= 42 || (rb && myLine >= 4) || (passy && myLine <= -6);
+              if (fits) checks.push("Script");
+            }
+            const vol = (r) => (pos === "QB" ? r.v.attempts : r.v.targets + r.v.carries);
+            if (mine.length >= 6) { const a3 = avg(mine.slice(0, 3).map(vol)), b3 = avg(mine.slice(3, 8).map(vol)); if (b3 > 0 && (over ? a3 >= b3 * 1.15 : a3 <= b3 * 0.85)) checks.push("Role"); }
+            if (p * dec(q.odds) - 1 >= 0.03) checks.push("Price");
+            bets.push({ kind: "prop", checks, oneSided: !both, defRank: d?.rank, defOf: d?.of, market: g.stat, period: "full", player: g.name, team: side === "home" ? H.abbr : A.abbr, pos, side: s, line: g.line,
               label: g.stat === "anytime_td" ? `${g.name} anytime TD` : `${g.name} ${s === "over" ? "O" : "U"} ${g.line} ${S.lbl}`, odds: q.odds, book: q.book, est: false, p: r3(p), edge: r3(p * dec(q.odds) - 1), why: w.slice(0, 5) });
           }
         }
@@ -378,13 +415,9 @@ async function main() {
 
       // one story per game: decide the total lean (over/under) and the side lean first, then drop bets that fight it
       // books shade overs (the public bets them), so an over has to clear a higher bar than an under
-      const isOver = (b) => (b.kind === "prop" && b.side !== "under") || (b.market === "total" && b.side === "over");
-      // props: unders only for now (overs went 6-18 on Nov 8); overs are still tracked on paper ("shadow") to see if they
-      // come back. Anytime TDs stay, but need 8%+. Game-total overs need 8%+.
-      const overProp = (b) => b.kind === "prop" && b.side !== "under" && b.market !== "anytime_td";
-      const need = (b) => (b.est ? null : overProp(b) ? Infinity : b.market === "anytime_td" ? 0.08 : b.market === "total" && b.side === "over" ? 0.08 : 0.025);
-      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= need(b)));
-      const shadowPool = bets.filter((b) => overProp(b) && b.edge >= 0.05);
+      // picks are made by the reasons: 3+ checks agreeing (4+ = strong), and the price can't be a bad one (edge >= 0)
+      const nChecks = (b) => (b.checks || []).filter((c) => c !== "Price").length;
+      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : nChecks(b) >= 3 && b.edge >= 0));
       const dirTotal = (b) => (b.market === "total" || b.kind === "prop" ? (b.side === "under" ? "under" : "over") : null);
       const dirSide = (b) => ((b.market === "spread" || b.market === "moneyline") && (b.side === "home" || b.side === "away") ? b.side : null);
       const pickLean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
@@ -406,13 +439,13 @@ async function main() {
       const dropped = ok.filter((b) => !fits(b)).length;
       droppedTotal += dropped;
       const keep = ok.filter(fits)
-        .map((b) => ({ ...b, score: b.est ? b.edge * 0.6 : b.oneSided ? b.edge * 0.6 : b.edge }))
+        .map((b) => ({ ...b, score: b.est ? 0.1 + b.edge * 0.3 : nChecks(b) * 0.05 + (b.checks.includes("Price") ? 0.03 : 0) + b.edge * 0.5 - (b.oneSided ? 0.05 : 0) }))
         .sort((a, b) => b.score - a.score);
       // one bet per market/period/player, best first
       const seen = new Set(), list = [];
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 2) break; }   // max 2 per game: one wrong read can't sink 3 units
-      for (const b of list) b.rating = !b.est && b.edge >= 0.07 ? "green" : "yellow";   // strong = 7%+ edge at a real price
-      const shadow = shadowPool.filter(fits).sort((a, b) => b.edge - a.edge).slice(0, 2).map((b) => ({ ...b, score: b.edge, rating: "yellow", shadow: true }));
+      for (const b of list) b.rating = !b.est && nChecks(b) >= 4 ? "green" : "yellow";   // strong = 4+ reasons agreeing
+      const shadow = [];
       games[u.id] = { script, shadow, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
@@ -463,7 +496,7 @@ async function record(out, teams, now) {
     if (mins > 40 || mins <= 0 || have.has(gid)) continue;      // after the props refresh (40-90 min out), before kickoff
     for (const b of [...g.bets.slice(0, 2), ...(g.shadow || [])]) {
       bets.push({ id: `${gid}|${b.label}`, lg, gid, start: g.start, home: g.home, away: g.away, kind: b.kind, market: b.market, period: b.period, side: b.side, line: b.line ?? null,
-        label: b.label, shadow: !!b.shadow, player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, loggedAt: new Date(now).toISOString() });
+        label: b.label, shadow: !!b.shadow, player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, checks: b.checks, loggedAt: new Date(now).toISOString() });
       logged++;
     }
     have.add(gid);
