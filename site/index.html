@@ -604,7 +604,7 @@ function tallyRec(list) {
 }
 function recHtml() {
   const all = BREC?.bets || [];
-  const lgBets = all.filter((b) => b.lg === L.lid);
+  const lgAll = all.filter((b) => b.lg === L.lid), lgBets = lgAll.filter((b) => !b.shadow), paper = lgAll.filter((b) => b.shadow);
   const r = tallyRec(lgBets);
   const col = (x) => (x > 0 ? "var(--grn)" : x < 0 ? "var(--red)" : "var(--txt)");
   const u = (x) => (x >= 0 ? "+" : "") + x.toFixed(1) + "u";
@@ -612,16 +612,17 @@ function recHtml() {
   const open = lgBets.filter((b) => !b.result).length;
   let h = `<button class="brec" id="brec"><div class="rhd"><span>${CFB ? "College" : "NFL"} best bets record</span><span>${r.n ? r.n + " graded" : "starts today"}${open ? " · " + open + " locked" : ""} ${RECOPEN ? "▲" : "▼"}</span></div>
     <div class="big"><b style="color:${col(r.u)}">${r.n ? u(r.u) : "–"}</b><span>${r.w}-${r.l}${r.p ? "-" + r.p : ""}${r.n ? " · " + (r.roi >= 0 ? "+" : "") + (r.roi * 100).toFixed(1) + "% ROI · " + Math.round((100 * r.w) / Math.max(1, r.w + r.l)) + "% hit" : ""}</span></div>
-    <div class="minis">${CFB ? mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("1st half*", lgBets.filter((b) => b.period === "h1")) + mini("Quarters*", lgBets.filter((b) => /^q/.test(b.period || ""))) : mini("Props", lgBets.filter((b) => b.kind === "prop")) + mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("1st half*", lgBets.filter((b) => b.kind === "period"))}</div></button>`;
+    <div class="minis">${CFB ? mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("1st half*", lgBets.filter((b) => b.period === "h1")) + mini("Quarters*", lgBets.filter((b) => /^q/.test(b.period || ""))) : mini("Props", lgBets.filter((b) => b.kind === "prop")) + mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("Prop overs (paper)", paper)}</div></button>`;
   if (RECOPEN) {
     const done = lgBets.filter((b) => b.result).slice(0, 25), lock = lgBets.filter((b) => !b.result);
+    const pt = tallyRec(paper);
     const row = (b) => `<div class="rrow"><span class="rb ${b.result || "open"}">${b.result ? b.result.toUpperCase() : "LOCKED"}</span><div><b>${esc(b.label)}</b> <span style="color:var(--mut)">${fmtOdds(b.odds)}${b.est ? " est" : ""}</span><small>${esc(b.away.abbr)} @ ${esc(b.home.abbr)} · ${new Date(b.start).toLocaleDateString([], { month: "short", day: "numeric" })}${b.actual != null ? " · " + esc(b.actual) : ""}</small></div><span style="color:${col(b.units || 0)};font-weight:800">${b.result && b.result !== "void" ? u(b.units || 0) : ""}</span></div>`;
-    h += `<div class="rlist">${lock.map(row).join("")}${done.map(row).join("")}${!lock.length && !done.length ? '<div class="empty" style="padding:14px">Nothing locked yet.</div>' : ""}<div class="note" style="padding:6px 2px">Tracks every game\'s top 2 best bets (what you see when you tap a game; the day\'s top 10 come from these), locked in the last 40 minutes before kickoff with fresh lines. 1 unit per bet. *Halves/quarters are graded at -110 on the estimated line, so check that record against your app's real lines.</div></div>`;
+    h += `<div class="rlist">${lock.map(row).join("")}${done.map(row).join("")}${!lock.length && !done.length ? '<div class="empty" style="padding:14px">Nothing locked yet.</div>' : ""}<div class="note" style="padding:6px 2px">Tracks every game\'s top 2 best bets (what you see when you tap a game; the day\'s top 10 come from these), locked in the last 40 minutes before kickoff with fresh lines. 1 unit per bet. Player prop overs are paused (they went 6-18 on Nov 8); "Prop overs (paper)" tracks the overs it would have picked${pt.n ? ` (${pt.w}-${pt.l}, ${(pt.u >= 0 ? "+" : "") + pt.u.toFixed(1)}u so far)` : ""}, so they come back if they turn around. *Halves/quarters are graded at -110 on the estimated line, so check that record against your app's real lines.</div></div>`;
   }
   return h;
 }
 const rateOf = (b) => (!b.est && b.edge >= 0.07 ? "green" : "yellow");
-const lockedFor = (pred) => (BREC?.bets || []).filter((b) => b.lg === L.lid && pred(b)).map((b) => ({ b: { ...b, why: b.why || [], locked: true }, g: { start: b.start, home: b.home, away: b.away }, gid: b.gid }));
+const lockedFor = (pred) => (BREC?.bets || []).filter((b) => b.lg === L.lid && !b.shadow && pred(b)).map((b) => ({ b: { ...b, why: b.why || [], locked: true }, g: { start: b.start, home: b.home, away: b.away }, gid: b.gid }));
 function bestFor() {
   const G = BEST?.leagues?.[L.lid]?.games || {};
   if (S.game) {

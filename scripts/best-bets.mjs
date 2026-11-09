@@ -379,7 +379,12 @@ async function main() {
       // one story per game: decide the total lean (over/under) and the side lean first, then drop bets that fight it
       // books shade overs (the public bets them), so an over has to clear a higher bar than an under
       const isOver = (b) => (b.kind === "prop" && b.side !== "under") || (b.market === "total" && b.side === "over");
-      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= (isOver(b) ? 0.05 : 0.025)));
+      // props: unders only for now (overs went 6-18 on Nov 8); overs are still tracked on paper ("shadow") to see if they
+      // come back. Anytime TDs stay, but need 8%+. Game-total overs need 8%+.
+      const overProp = (b) => b.kind === "prop" && b.side !== "under" && b.market !== "anytime_td";
+      const need = (b) => (b.est ? null : overProp(b) ? Infinity : b.market === "anytime_td" ? 0.08 : b.market === "total" && b.side === "over" ? 0.08 : 0.025);
+      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : b.edge >= need(b)));
+      const shadowPool = bets.filter((b) => overProp(b) && b.edge >= 0.05);
       const dirTotal = (b) => (b.market === "total" || b.kind === "prop" ? (b.side === "under" ? "under" : "over") : null);
       const dirSide = (b) => ((b.market === "spread" || b.market === "moneyline") && (b.side === "home" || b.side === "away") ? b.side : null);
       const pickLean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
@@ -407,7 +412,8 @@ async function main() {
       const seen = new Set(), list = [];
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 2) break; }   // max 2 per game: one wrong read can't sink 3 units
       for (const b of list) b.rating = !b.est && b.edge >= 0.07 ? "green" : "yellow";   // strong = 7%+ edge at a real price
-      games[u.id] = { script, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
+      const shadow = shadowPool.filter(fits).sort((a, b) => b.edge - a.edge).slice(0, 2).map((b) => ({ ...b, score: b.edge, rating: "yellow", shadow: true }));
+      games[u.id] = { script, shadow, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
     if (lg === "NFL") { const ch = Object.values(ctxOut).filter((c) => c.qbWeeks); console.log(`best-bets: NFL lineups · ${Object.keys(ctxOut).length} prop players checked · ${ch.length} on teams with a new QB · ${Object.values(ctxOut).filter((c) => c.flags.length).length} with a warning`); }
@@ -455,9 +461,9 @@ async function record(out, teams, now) {
   for (const [lg, L] of Object.entries(out.leagues)) for (const [gid, g] of Object.entries(L.games)) {
     const mins = (new Date(g.start).getTime() - now) / 60000;
     if (mins > 40 || mins <= 0 || have.has(gid)) continue;      // after the props refresh (40-90 min out), before kickoff
-    for (const b of g.bets.slice(0, 3)) {
+    for (const b of [...g.bets.slice(0, 2), ...(g.shadow || [])]) {
       bets.push({ id: `${gid}|${b.label}`, lg, gid, start: g.start, home: g.home, away: g.away, kind: b.kind, market: b.market, period: b.period, side: b.side, line: b.line ?? null,
-        label: b.label, player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, loggedAt: new Date(now).toISOString() });
+        label: b.label, shadow: !!b.shadow, player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, loggedAt: new Date(now).toISOString() });
       logged++;
     }
     have.add(gid);
