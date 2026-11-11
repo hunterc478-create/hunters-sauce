@@ -449,11 +449,21 @@ async function main() {
       for (const b of keep) { const k = [b.kind, b.market, b.period, b.player || ""].join("|"); if (seen.has(k)) continue; seen.add(k); list.push(b); if (list.length >= 2) break; }   // max 2 per game: one wrong read can't sink 3 units
       for (const b of list) b.rating = !b.est && nChecks(b) >= 4 ? "green" : "yellow";   // strong = 4+ reasons agreeing
       const shadow = [];
-      games[u.id] = { script, shadow, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
+      // ➕ More plays: one reason short of a best bet, still fits the game's story and isn't a bad price
+      const inMain = new Set(list.map((b) => b.label)), seenM = new Set(), more = [];
+      for (const b of bets.filter((x) => !x.est && !inMain.has(x.label) && nChecks(x) >= need(x) - 1 && x.edge >= 0 && fits(x))
+        .map((x) => ({ ...x, score: nChecks(x) * 0.05 + x.edge * 0.5 - (x.oneSided ? 0.05 : 0), rating: "yellow", tier: "more" }))
+        .sort((a, b) => b.score - a.score)) {
+        const k = [b.kind, b.market, b.period, b.player || ""].join("|");
+        if (seenM.has(k) || list.some((m) => [m.kind, m.market, m.period, m.player || ""].join("|") === k)) continue;
+        seenM.add(k); more.push(b); if (more.length >= 3) break;
+      }
+      games[u.id] = { script, shadow, more, start: u.start, home: { id: H.id, abbr: H.abbr, short: H.short, logo: H.logo, rank: H.rank }, away: { id: A.id, abbr: A.abbr, short: A.short, logo: A.logo, rank: A.rank }, spread: u.homeLine, total: u.total, bets: list };
     }
     out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
     if (lg === "NFL") { const ch = Object.values(ctxOut).filter((c) => c.qbWeeks); console.log(`best-bets: NFL lineups · ${Object.keys(ctxOut).length} prop players checked · ${ch.length} on teams with a new QB · ${Object.values(ctxOut).filter((c) => c.flags.length).length} with a warning`); }
     const all = Object.values(games).flatMap((g) => g.bets);
+    console.log(`best-bets: ${lg} more plays · ${Object.values(games).reduce((n, g) => n + g.more.length, 0)}`);
     console.log(`best-bets: ${lg} · ${droppedTotal} bets dropped for fighting their game's script or matchup`);
     console.log(`best-bets: ${lg} · ${Object.keys(games).length} games · ${all.length} bets (${all.filter((b) => b.kind === "prop").length} props, ${all.filter((b) => b.kind === "line").length} priced lines, ${all.filter((b) => b.est).length} est. halves/quarters) · ${rows ? rows.length + " player-weeks" : "no player stats"}`);
     const top = all.sort((a, b) => b.score - a.score).slice(0, 3);
@@ -497,9 +507,9 @@ async function record(out, teams, now) {
   for (const [lg, L] of Object.entries(out.leagues)) for (const [gid, g] of Object.entries(L.games)) {
     const mins = (new Date(g.start).getTime() - now) / 60000;
     if (mins > 40 || mins <= 0 || have.has(gid)) continue;      // after the props refresh (40-90 min out), before kickoff
-    for (const b of [...g.bets.slice(0, 2), ...(g.shadow || [])]) {
+    for (const b of [...g.bets.slice(0, 2), ...(g.shadow || []), ...(g.more || [])]) {
       bets.push({ id: `${gid}|${b.label}`, lg, gid, start: g.start, home: g.home, away: g.away, kind: b.kind, market: b.market, period: b.period, side: b.side, line: b.line ?? null,
-        label: b.label, shadow: !!b.shadow, player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, checks: b.checks, loggedAt: new Date(now).toISOString() });
+        label: b.label, shadow: !!b.shadow, tier: b.tier || "best", player: b.player, team: b.team, odds: b.odds, book: b.book, est: !!b.est, p: b.p, edge: b.edge, rating: b.rating, why: b.why, checks: b.checks, loggedAt: new Date(now).toISOString() });
       logged++;
     }
     have.add(gid);

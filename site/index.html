@@ -607,7 +607,7 @@ function tallyRec(list) {
 }
 function recHtml() {
   const all = BREC?.bets || [];
-  const lgAll = all.filter((b) => b.lg === L.lid), lgBets = lgAll.filter((b) => !b.shadow), paper = lgAll.filter((b) => b.shadow);
+  const lgAll = all.filter((b) => b.lg === L.lid), lgBets = lgAll.filter((b) => !b.shadow && b.tier !== "more"), paper = lgAll.filter((b) => b.tier === "more");
   const r = tallyRec(lgBets);
   const col = (x) => (x > 0 ? "var(--grn)" : x < 0 ? "var(--red)" : "var(--txt)");
   const u = (x) => (x >= 0 ? "+" : "") + x.toFixed(1) + "u";
@@ -615,7 +615,7 @@ function recHtml() {
   const open = lgBets.filter((b) => !b.result).length;
   let h = `<button class="brec" id="brec"><div class="rhd"><span>${CFB ? "College" : "NFL"} best bets record</span><span>${r.n ? r.n + " graded" : "starts today"}${open ? " · " + open + " locked" : ""} ${RECOPEN ? "▲" : "▼"}</span></div>
     <div class="big"><b style="color:${col(r.u)}">${r.n ? u(r.u) : "–"}</b><span>${r.w}-${r.l}${r.p ? "-" + r.p : ""}${r.n ? " · " + (r.roi >= 0 ? "+" : "") + (r.roi * 100).toFixed(1) + "% ROI · " + Math.round((100 * r.w) / Math.max(1, r.w + r.l)) + "% hit" : ""}</span></div>
-    <div class="minis">${CFB ? mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("1st half*", lgBets.filter((b) => b.period === "h1")) + mini("Quarters*", lgBets.filter((b) => /^q/.test(b.period || ""))) : mini("Props", lgBets.filter((b) => b.kind === "prop")) + mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("Prop overs (paper)", paper)}</div></button>`;
+    <div class="minis">${CFB ? mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("Halves/Qtrs*", lgBets.filter((b) => b.kind === "period")) + mini("➕ More plays", paper) : mini("Props", lgBets.filter((b) => b.kind === "prop")) + mini("Game lines", lgBets.filter((b) => b.kind === "line")) + mini("➕ More plays", paper)}</div></button>`;
   if (RECOPEN) {
     const done = lgBets.filter((b) => b.result).slice(0, 25), lock = lgBets.filter((b) => !b.result);
     const pt = tallyRec(paper);
@@ -626,7 +626,7 @@ function recHtml() {
 }
 const nCk = (b) => (b.checks || []).filter((c) => c !== "Price").length;
 const rateOf = (b) => (b.checks ? (!b.est && nCk(b) >= 4 ? "green" : "yellow") : !b.est && b.edge >= 0.07 ? "green" : "yellow");
-const lockedFor = (pred) => (BREC?.bets || []).filter((b) => b.lg === L.lid && !b.shadow && pred(b)).map((b) => ({ b: { ...b, why: b.why || [], locked: true }, g: { start: b.start, home: b.home, away: b.away }, gid: b.gid }));
+const lockedFor = (pred) => (BREC?.bets || []).filter((b) => b.lg === L.lid && !b.shadow && b.tier !== "more" && pred(b)).map((b) => ({ b: { ...b, why: b.why || [], locked: true }, g: { start: b.start, home: b.home, away: b.away }, gid: b.gid }));
 function bestFor() {
   const G = BEST?.leagues?.[L.lid]?.games || {};
   if (S.game) {
@@ -661,6 +661,14 @@ function cardHtml(b, g, gid, i) {
       ${b.locked && b.actual != null ? `<div class="mt"><span>Result <b>${esc(b.actual)}</b></span></div>` : ""}${why.length ? `<ul>${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}${b.why.length > 3 && !open ? `<div class="more">+ ${b.why.length - 3} more reason${b.why.length - 3 > 1 ? "s" : ""} (tap)</div>` : ""}
     </button>`;
 }
+function moreFor() {
+  const G = BEST?.leagues?.[L.lid]?.games || {};
+  if (S.game) { const g = G[S.game]; return g && new Date(g.start).getTime() > Date.now() ? (g.more || []).map((b) => ({ b, g, gid: S.game })) : []; }
+  const now = Date.now(), dayOf = (iso) => new Date(iso).toLocaleDateString("en-CA");
+  const ent = Object.entries(G).filter(([, g]) => new Date(g.start).getTime() > now);
+  const day = [...new Set(ent.map(([, g]) => dayOf(g.start)))].sort()[0];
+  return ent.filter(([, g]) => dayOf(g.start) === day).flatMap(([gid, g]) => (g.more || []).slice(0, 2).map((b) => ({ b, g, gid }))).sort((x, y) => y.b.score - x.b.score).slice(0, 10);
+}
 function bestHtml() {
   if (!BEST || S.q) return "";
   const { title, list, empty } = bestFor();
@@ -668,6 +676,8 @@ function bestHtml() {
   let h = recHtml() + `<div class="sec" style="color:var(--acc)">🔥 ${esc(title)}</div>`;
   if (!list.length) return h + `<div class="empty" style="padding:16px">${esc(empty)}</div>`;
   h += list.map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("");
+  const mp = moreFor();
+  if (mp.length) h += `<div class="sec" style="color:var(--acc)">➕ More plays · ${mp.length}</div><div class="note" style="padding:0 6px 8px">One reason short of a best bet. Smaller bets to spread out the day; tracked in their own record.</div>` + mp.map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("");
   if (!S.game) {
     const today = new Date().toLocaleDateString("en-CA");
     const lk = lockedFor((b) => new Date(b.start).toLocaleDateString("en-CA") === today && new Date(b.start).getTime() <= Date.now() + 40 * 60000);
