@@ -462,6 +462,11 @@ async function main() {
     }
     out.leagues[lg] = { games, context: lg === "NFL" ? ctxOut : undefined };
     if (lg === "NFL") { const ch = Object.values(ctxOut).filter((c) => c.qbWeeks); console.log(`best-bets: NFL lineups · ${Object.keys(ctxOut).length} prop players checked · ${ch.length} on teams with a new QB · ${Object.values(ctxOut).filter((c) => c.flags.length).length} with a warning`); }
+    // keep More plays tight: only the 3 best near-misses per day for the whole league
+    { const dayOf = (iso) => new Date(iso).toLocaleDateString("en-CA", { timeZone: "America/Chicago" }), byDay = {};
+      for (const g of Object.values(games)) for (const b of g.more) (byDay[dayOf(g.start)] ||= []).push(b);
+      const keep = new Set(Object.values(byDay).flatMap((l) => l.sort((x, y) => y.score - x.score).slice(0, 3)));
+      for (const g of Object.values(games)) g.more = g.more.filter((b) => keep.has(b)); }
     const all = Object.values(games).flatMap((g) => g.bets);
     console.log(`best-bets: ${lg} more plays · ${Object.values(games).reduce((n, g) => n + g.more.length, 0)}`);
     console.log(`best-bets: ${lg} · ${droppedTotal} bets dropped for fighting their game's script or matchup`);

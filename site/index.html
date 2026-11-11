@@ -661,6 +661,7 @@ function cardHtml(b, g, gid, i) {
       ${b.locked && b.actual != null ? `<div class="mt"><span>Result <b>${esc(b.actual)}</b></span></div>` : ""}${why.length ? `<ul>${why.map((w) => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}${b.why.length > 3 && !open ? `<div class="more">+ ${b.why.length - 3} more reason${b.why.length - 3 > 1 ? "s" : ""} (tap)</div>` : ""}
     </button>`;
 }
+let MOREOPEN = false;
 function moreFor() {
   const G = BEST?.leagues?.[L.lid]?.games || {};
   if (S.game) { const g = G[S.game]; return g && new Date(g.start).getTime() > Date.now() ? (g.more || []).map((b) => ({ b, g, gid: S.game })) : []; }
@@ -677,7 +678,7 @@ function bestHtml() {
   if (!list.length) return h + `<div class="empty" style="padding:16px">${esc(empty)}</div>`;
   h += list.map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("");
   const mp = moreFor();
-  if (mp.length) h += `<div class="sec" style="color:var(--acc)">➕ More plays · ${mp.length}</div><div class="note" style="padding:0 6px 8px">One reason short of a best bet. Smaller bets to spread out the day; tracked in their own record.</div>` + mp.map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("");
+  if (mp.length) h += `<button class="chip" id="moremp" style="display:block;margin:10px auto;padding:8px 14px">${MOREOPEN ? "Hide more plays" : `➕ ${mp.length} more play${mp.length > 1 ? "s" : ""}`}</button>` + (MOREOPEN ? `<div class="note" style="padding:0 6px 8px">One reason short of a best bet. Smaller bets to spread out the day; tracked in their own record.</div>` + mp.map(({ b, g, gid }, i) => cardHtml(b, g, gid, i)).join("") : "");
   if (!S.game) {
     const today = new Date().toLocaleDateString("en-CA");
     const lk = lockedFor((b) => new Date(b.start).toLocaleDateString("en-CA") === today && new Date(b.start).getTime() <= Date.now() + 40 * 60000);
@@ -687,6 +688,7 @@ function bestHtml() {
 }
 document.addEventListener("click", (e) => {
   if (e.target.closest("#brec")) { RECOPEN = !RECOPEN; render(); return; }
+  if (e.target.closest("#moremp")) { MOREOPEN = !MOREOPEN; render(); return; }
   const c = e.target.closest(".bb"); if (!c) return;
   if (!openWhy.has(c.dataset.bb)) { openWhy.add(c.dataset.bb); render(); return; }
   if (c.dataset.bp) openPlayer(c.dataset.bp, c.dataset.bs, c.dataset.bl, c.dataset.bn, c.dataset.bt);
