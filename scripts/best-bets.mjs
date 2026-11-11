@@ -417,7 +417,10 @@ async function main() {
       // books shade overs (the public bets them), so an over has to clear a higher bar than an under
       // picks are made by the reasons: 3+ checks agreeing (4+ = strong), and the price can't be a bad one (edge >= 0)
       const nChecks = (b) => (b.checks || []).filter((c) => c !== "Price").length;
-      const ok = bets.filter((b) => (b.est ? b.p >= 0.555 : nChecks(b) >= 3 && b.edge >= 0));
+      // Nov 10 review: prop overs went 5-18 (they need 4 reasons, unders 3); estimated halves/quarters went 8-10 and
+      // their real line can't be seen (out of best bets); college 3-reason lines went 5-7 (college needs 4)
+      const need = (b) => (b.kind === "prop" && b.side !== "under" ? 4 : lg === "NCAAF" ? 4 : 3);
+      const ok = bets.filter((b) => !b.est && nChecks(b) >= need(b) && b.edge >= 0);
       const dirTotal = (b) => (b.market === "total" || b.kind === "prop" ? (b.side === "under" ? "under" : "over") : null);
       const dirSide = (b) => ((b.market === "spread" || b.market === "moneyline") && (b.side === "home" || b.side === "away") ? b.side : null);
       const pickLean = (list, dir) => { const best = list.filter((b) => dir(b)).sort((a, b) => b.p - a.p || b.edge - a.edge)[0]; return best ? dir(best) : null; };
